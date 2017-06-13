@@ -9,38 +9,43 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 import math
+import pickle
 
 from matplotlib import patches as mpatches
 from matplotlib import lines as lines
+
+
 #%%
 import pathlength as pl
 
 #%%
 
 class c():
-    def __init__(self,l,D,fitfunc,name='NoName',guess=None,xlabel='x',sigma=None):
+    def __init__(self,name='NoName',**kwargs):#l=None,D=None,fitfunc=None,guess=None,xlabel='x',sigma=None
 #        [self.A,self.C],fit_cov = curve_fit(fitfunc,l,D1,guess)
 #        print(self.A)
 #        print(self.C)
         self.name = name
-        self.l = l
-        self.D=D
-        self.fitfunc = fitfunc
-        self.xlabel = xlabel
-        self.sigma = sigma
-        linear = odr.Model(self.fitfunc)
-        mydata = odr.RealData(l, D,sy=sigma)
-        myodr = odr.ODR(mydata, linear, beta0 = guess,maxit=5000)
-#        myodr.set_job(fit_type=2)
-        myoutput = myodr.run()
-        self.A   = myoutput.beta
-        self.fit_cov = myoutput.cov_beta
-        self.fit_sd = myoutput.beta
-        myoutput.pprint()
-        
-        print(f'name:{self.name}')
-        print(f'A:{self.A}')
+        self.v = kwargs
 
+        if 'l' in self.v:
+            linear = odr.Model(self.v['fitfunc'])
+            mydata = odr.RealData(self.v['l'], self.v['D'],sy=self.v['sigma'])
+            myodr = odr.ODR(mydata, linear, beta0 = self.v['guess'],maxit=5000)
+    #        myodr.set_job(fit_type=2)
+            myoutput = myodr.run()
+            self.v['A']   = myoutput.beta
+            self.A = myoutput.beta
+            self.v['fit_cov'] = myoutput.cov_beta
+            self.v['fit_sd'] = myoutput.beta
+            myoutput.pprint()
+            
+            print(f'name:{self.name}')
+            print(f'A:{self.v["A"]}')
+            self.save_fit()
+        else:
+            self.load_fit()
+                
 
     def show_fit(self):
 #        labels = []
@@ -51,34 +56,44 @@ class c():
 
         lin=np.linspace(0,120,120)
         for i in np.arange(self.D.shape[0]):
-            curve, = plt.plot(lin,self.fitfunc(self.A[[0,i+1]],lin),label = labels[i],zorder=1)
+            curve, = plt.plot(lin,self.v['fitfunc'](self.v['A'][[0,i+1]],lin),label = labels[i],zorder=1)
             col = curve.get_color()
-            plt.errorbar(self.l[i,:],self.D[i,:],color = col, marker ='o',linestyle = 'none',markersize = 5,capsize=2,zorder=2)
-        maxval = math.ceil(np.max(self.D)*1.1*10)/10
+            plt.errorbar(self.v['l'][i,:],self.v['D'][i,:],color = col, marker ='o',linestyle = 'none',markersize = 5,capsize=2,zorder=2)
+        maxval = math.ceil(np.max(self.v['D'])*1.1*10)/10
         plt.axis((0,140,0,maxval))
         plt.ylabel(r'Dose/CTDI$_{vol}$')
-        plt.xlabel(self.xlabel)
+        plt.xlabel(self.v['xlabel'])
         lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2)
 
-        plt.savefig(self.name+'.eps',format='eps',dpi=600,bbox_extra_artists=(lgd,), bbox_inches='tight')
+        plt.savefig('out/'+self.name+'.eps',format='eps',dpi=600,bbox_extra_artists=(lgd,), bbox_inches='tight')
         plt.show()
 
         #plt.show()
     def show_discrepancy(self):
-        res = self.fitfunc(self.A,self.l)
-        res = res/self.D
-        res=res
-        self.res=res
+        res = self.v['fitfunc'](self.v['A'],self.v['l'])
+        res = res/self.v['D']
+        self.v['res']=res
 #        print(res.std())
 #        plt.ylabel(r'$k_{length}$')
         plt.boxplot(res, 0, 'rs',0)
         plt.xlabel('Fit error')
-        plt.savefig(self.name+'_error.eps',format='eps',dpi=600)
+        plt.savefig('out/'+self.name+'_error.eps',format='eps',dpi=600)
         plt.show()
 
+        
+    def save_fit(self):
+        pickle.dump(self.v,open('fit/'+self.name,'wb'))
+    
+    def load_fit(self):
+        self.v = pickle.load(open('fit/'+self.name,'rb'))
+        self.A = self.v['A']
+        
 #%%
+#Create new calibration based on measured data
+#def calibrate(path):
+  
 #Load the data set
-df = pd.read_excel('stats.xlsx')
+df = pd.read_excel('dat/'+'raw.xlsx')
 #create Dnorm column, and corresponding error column
 df['Dnorm'] = df.D/df.ctdi
 df['Dnormerr'] = df.Derr*df.D/df.ctdi
@@ -135,7 +150,7 @@ def Afit(A,X):
 AA=[.4,.9,-.22,8,-.914]
 AA2 = [ 0.858595 ,   0.02192678, 0.00661411,  6.28199231 , 2.68660476]
 
-cA = c((dfA.l0,dfA.l,dfA.kvp),dfA.Dnorm,sigma=dfA.Dnormerr, fitfunc = Afit,guess = AA2, xlabel = 'Scan length (mm)')
+cA = c(name='axfit',l=(dfA.l0,dfA.l,dfA.kvp),D=dfA.Dnorm,sigma=dfA.Dnormerr, fitfunc = Afit,guess = AA2, xlabel = 'Scan length (mm)')
 #dcA.show_fit()	
 
 X=[df.l0,df.l,df.kvp]
@@ -206,8 +221,8 @@ ax.legend(handles = testh+testi,ncol=2,fancybox=True)
 ax.set_ylabel('Measured/predicted surface dose')
 
 fig.tight_layout()
-fig.savefig('datavsmodel.png',format='png',dpi=300)
-fig.savefig('datavsmodel.pdf',format='pdf',dpi=600)
+fig.savefig('out/'+'datavsmodel.png',format='png',dpi=300)
+fig.savefig('out/'+'datavsmodel.pdf',format='pdf',dpi=600)
 plt.show()
 plt.close()
 print((df.final[Amask]).std()/(df.final[Amask]).mean())
@@ -263,7 +278,7 @@ ax.legend(handles = testh+testi,ncol=2,fancybox=True)
 ax.set_ylabel(r'Surface dose/CTDI$_{vol}$')
 
 fig.tight_layout()
-fig.savefig('ctdidata.pdf',format='pdf',dpi=600)
+fig.savefig('out/'+'ctdidata.pdf',format='pdf',dpi=600)
 plt.show()
 plt.close()
 print((df.final[Amask]).std()/(df.final[Amask]).mean())
@@ -287,7 +302,7 @@ for i, kv in enumerate(kvs):
 ax.legend()
 ax.set_ylabel(r'Scan length correction factor $k_{length}$')
 ax.set_xlabel('Scan length (mm)')
-fig.savefig('klength.pdf',format='pdf',dpi=600)
+fig.savefig('out/'+'klength.pdf',format='pdf',dpi=600)
 plt.show()
 plt.close()
 
@@ -317,7 +332,7 @@ for i, kv in enumerate(kvs):
 ax.legend()
 ax.set_ylabel(r'Collimation correction factor $k_{coll}$')
 ax.set_xlabel('Number of rotations (n)')
-fig.savefig('kcoll.pdf',format='pdf',dpi=600)
+fig.savefig('out/'+'kcoll.pdf',format='pdf',dpi=600)
 plt.show()
 plt.close()
 
@@ -385,7 +400,7 @@ ax.set_ylim([.65,1.35])
 ax.set_ylabel('Measured/predicted surface dose')
 
 fig.tight_layout()
-fig.savefig('hel.pdf',format='pdf',dpi=600)
+fig.savefig('out/'+'hel.pdf',format='pdf',dpi=600)
 plt.show()
 plt.close()
 
