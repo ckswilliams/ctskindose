@@ -7,7 +7,6 @@ from shapely.geometry import Point
 import shapely.affinity
 from scipy.signal import savgol_filter
 
-import pdb
 
 R=55
 #%%
@@ -200,7 +199,7 @@ def dose_series(iDD,iBT,ishape,theta,Dlength,dlength,phi):
     
 
 #Load depth dose and bowtie data
-DDdata = np.loadtxt('DD.csv',skiprows=1,delimiter=',')   
+DDdata = np.loadtxt('dat/DD.csv',skiprows=1,delimiter=',')   
   
 dd={}
 for i in [80,100,120]:
@@ -209,7 +208,7 @@ for i in [80,100,120]:
 bt = {}
 bt_measureenergy = '120'
 for filter_type in ['body','head']:
-    bt[filter_type]=bowtie(filter_type+'.csv',dd[bt_measureenergy])
+    bt[filter_type]=bowtie('dat/'+filter_type+'.csv',dd[bt_measureenergy])
     
     
 def plot_bowties():
@@ -222,7 +221,7 @@ def plot_bowties():
     ax.legend(loc=1)
     ax.yaxis.set_major_formatter(plt.NullFormatter())
     fig.tight_layout()
-    fig.savefig('geoout/bowties.eps',format='eps',dpi=600)
+    fig.savefig('out/bowties.eps',format='eps',dpi=600)
     plt.show()
 plot_bowties()
 
@@ -281,7 +280,7 @@ def plot_geo(name,theta,D,d,phi,ax=None):
 #    ax.set_ylabel(r'Angle ($^{\circ}$),distance (cm)')
 #    ax.set_xlabel(r'$\Theta$ ($^{\circ}$)')
     ax.legend(loc=2)
-    #plt.savefig('geoout/'+name+'.eps', format='eps', dpi=600)
+    #plt.savefig('out/'+name+'.eps', format='eps', dpi=600)
     #plt.show()
     
 def plot_dose(name,theta,dose,ax):
@@ -291,7 +290,7 @@ def plot_dose(name,theta,dose,ax):
     #plt.legend(loc=2)
     
     ax.yaxis.set_major_formatter(plt.NullFormatter())
-    #plt.savefig('geoout/'+name+'_dose.eps', format='eps', dpi=600)
+    #plt.savefig('out/'+name+'_dose.eps', format='eps', dpi=600)
     #plt.show()
     
  
@@ -329,7 +328,7 @@ def make_geo_plots():
                 ax.set_ylabel('Relative dose')
 
     plt.tight_layout()
-    plt.savefig('geoout/geos_doses.eps',format='eps',dpi=600)
+    plt.savefig('out/geos_doses.eps',format='eps',dpi=600)
     plt.show()
     rc('text', usetex=False)
     
@@ -356,7 +355,7 @@ def make_kvp_plots():
     
         #Show background objects
         add_patient_size(ax)
-        plt.savefig('geoout/totdose_'+ddname+'.pdf',format='pdf',dpi=600)
+        plt.savefig('out/totdose_'+ddname+'.pdf',format='pdf',dpi=600)
         plt.show()
         
 
@@ -402,7 +401,7 @@ def make_shape_plots():
         plt.legend(loc=2)
         
 
-        plt.savefig('geoout/totdose_'+shape[2]+'.pdf',format='pdf',dpi=600)
+        plt.savefig('out/totdose_'+shape[2]+'.pdf',format='pdf',dpi=600)
         plt.show()
         
     return dose_list
@@ -418,7 +417,7 @@ def make_shape_ratio_plots(data = False):
     plt.ylabel('Surface intensity ratio')
     plt.xlabel('Major axis phantom diameter')
     plt.legend(['80 kVp','100 kVp', '120 kVp'],loc = 1)
-    plt.savefig('geoout/shaperatio.eps',format='eps',dpi=600)
+    plt.savefig('out/shaperatio.eps',format='eps',dpi=600)
     
     return data
 
