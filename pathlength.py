@@ -7,6 +7,9 @@ from shapely.geometry import Point
 import shapely.affinity
 from scipy.signal import savgol_filter
 
+import os
+script_dir = os.path.dirname(__file__)
+
 
 R=55
 #%%
@@ -98,9 +101,21 @@ def get_geo(AP,LR,angle=0,CT_rad = R):
 
 #The depth dose class. Initialise with 
 class DD():
-    def __init__(self,D):
-        self.d=D[:,0]
-        self.D = D[:,1]
+    def __init__(self,fn):
+        df = pd.read_excel(fn)
+        df.Y = savgol_filter(df.Y,101,1)
+        maxindex=df[df.Y == df.Y.max()].index[0]
+    
+        D = df.Y
+        #[maxindex:
+        d = np.arange(0,len(D))/50-maxindex/50
+        D = D * (d+30)**2
+        D=D/D.max()
+        maxindex=D[D == D.max()].index[0]
+        D=D[d<15][maxindex:]
+        d=d[d<15][maxindex:]
+        self.d=d
+        self.D = D
         self.fit_exp()
     
     def fit_exp(self):
@@ -121,7 +136,7 @@ class DD():
     
     def get_d(self,D):
         D=np.array(D)
-        Dcutoff = self.get_D(np.max(self.d)/2)
+        Dcutoff = self.get_D(np.max(self.d)*3/4)
         mask = D>Dcutoff
         d = np.zeros(D.shape)
         d[mask]=np.interp(D[mask],self.D[::-1],self.d[::-1])
@@ -131,7 +146,7 @@ class DD():
             
         
 class bowtie():
-    def __init__(self,fn,iDD):
+    def __init__(self,fn):
         BTdata = np.loadtxt(fn,skiprows=0,delimiter=',')
         self.x = BTdata[:,0]
         self.I = BTdata[:,1]
@@ -199,17 +214,58 @@ def dose_series(iDD,iBT,ishape,theta,Dlength,dlength,phi):
     
 
 #Load depth dose and bowtie data
-DDdata = np.loadtxt('dat/DD.csv',skiprows=1,delimiter=',')   
-  
-dd={}
-for i in [80,100,120]:
-    dd[str(i)] = DD(DDdata[DDdata[:,0]==i][:,(1,3)])
 
-bt = {}
-bt_measureenergy = '120'
-for filter_type in ['body','head']:
-    bt[filter_type]=bowtie('dat/'+filter_type+'.csv',dd[bt_measureenergy])
+
+
+
+
+
     
+
+class device_data():
+    def __init__(self,dd_list,bt_list):
+        self.set_dd_list(dd_list)
+        self.set_bt_list(bt_list)
+            
+    def set_dd_list(self,dd_list):
+        self.dd={}
+        for dd in dd_list:
+            self.set_dd(*dd)
+            
+    def set_bt_list(self,bt_list):
+        self.bt = {}
+        for bt in bt_list:
+            self.set_bt(*bt)
+    
+    def set_dd(self,kv,fn):
+        self.dd[kv] = DD(fn)
+    
+    def set_bt(self,filter_type,kv,fn):
+        if filter_type not in self.bt:
+            self.bt[filter_type] = {}
+        self.bt[filter_type][kv]=bowtie(fn)
+    
+Devices = device_data([],[])
+
+default_dds = [[80,'dat/dd/100.xlsx'],
+                [100,'dat/dd/100.xlsx'],
+                [120,'dat/dd/120.xlsx'],
+                [140,'dat/dd/140.xlsx']]
+
+def default_bts_maker():
+    defaulty = []
+    kvs = [80,100,120,140]
+    types = ['body','head']
+    bt_dir = 'dat/bowtie/'
+    for kv in kvs:
+        for filt in types:
+            defaulty.append([filt,kv,bt_dir+filt+'.csv'])
+    return defaulty
+default_bts = default_bts_maker()
+
+Devices.set_dd_list(default_dds)
+Devices.set_bt_list(default_bts)
+  
     
 def plot_bowties():
 #    fig, axes = plt.subplots(nrows=1, ncols=2,sharey=True, figsize=(9, 4))# , sharex=True, sharey=True)
@@ -223,32 +279,32 @@ def plot_bowties():
     fig.tight_layout()
     fig.savefig('out/bowties.eps',format='eps',dpi=600)
     plt.show()
-plot_bowties()
+#plot_bowties()
 
 
 #%%
 #Get total dose for each ellipse, for circles
 def total_dose(AP,LR,ddname,filter_type,angle = 0):
     try:
-        iDD = dd[str(ddname)]
+        iDD = Devices.dd[ddname]
     except KeyError:
         print('Could not load depth dose with name' + str(ddname))
         print('Available types are:')
         print(list(dd.keys()))
         try:
-            iDD = dd['120']
+            iDD = Devices.dd['120']
             print('Defaulting to 120 kVp')
         except:
-            iDD = dd[list(dd.keys())[-1]]
-            print('Defaulting to '+ list(dd.keys())[-1] +'kVp')
+            iDD = Devices.dd[list(Devices.dd.keys())[-1]]
+            print('Defaulting to '+ list(Devices.dd.keys())[-1] +'kVp')
     try:
-        iBT = bt[filter_type]
+        iBT = Devices.bt[filter_type][ddname]
     except KeyError:
         print('Could not load bowtie filter with name' + filter_type)
         print('Available types are:')
-        print(list(bt.keys()))
-        print('Defaulting to '+list(bt.keys())[-1])
-        iBT = bt[list(bt.keys())[-1]]
+        print(list(Devices.bt.keys()))
+        print('Defaulting to '+list(Devices.bt.keys())[-1])
+        iBT = Devices.bt[list(Devices.bt.keys())[-1]]
     data,ishape = get_geo(AP,LR,angle)
     dose = dose_series(iDD,iBT,ishape,*data)
     return np.sum(dose)
@@ -267,6 +323,10 @@ def relative_dose(AP,LR,ddname,filter_type):
 
 def relative_dose_to_front(AP,LR,ddname,filter_type,angle):
     return total_dose(AP,LR,ddname,filter_type,angle)/total_dose(AP,LR,ddname,filter_type,0)
+
+
+
+
 
 
 #%%

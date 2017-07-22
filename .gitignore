@@ -13,6 +13,7 @@
 *.eps
 *.png
 *__pycache__*
+out/*
 
 
 #Prefab from the git website

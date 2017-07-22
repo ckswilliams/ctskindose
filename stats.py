@@ -18,6 +18,8 @@ from matplotlib import lines as lines
 #%%
 import pathlength as pl
 
+plotting = False
+
 #%%
 
 class c():
@@ -42,9 +44,9 @@ class c():
             
             print(f'name:{self.name}')
             print(f'A:{self.v["A"]}')
-            self.save_fit()
-        else:
-            self.load_fit()
+#            self.save_fit()
+#        else:
+#            self.load_fit()
                 
 
     def show_fit(self):
@@ -82,27 +84,60 @@ class c():
 
         
     def save_fit(self):
-        pickle.dump(self.v,open('fit/'+self.name,'wb'))
+        pass
+#        pickle.dump(self.v,open('fit/'+self.name,'wb'))
     
-    def load_fit(self):
-        self.v = pickle.load(open('fit/'+self.name,'rb'))
-        self.A = self.v['A']
+#    def load_fit(self):
+#        self.v = pickle.load(open('fit/'+self.name,'rb'))
+#        self.A = self.v['A']
+
+
+class device_settings():
+    def __init__(self,dd_df='default',bt_df='default'):
+#        This list should come by grace of the input into the app, or manually here
+#        bt_list = [(filter_type,kv,fn)]
+#        dd_list = [(kv,fn)]
+#           
         
-#%%
-#Create new calibration based on measured data
-#def calibrate(path):
-  
-#Load the data set
-df = pd.read_excel('dat/'+'raw.xlsx')
-#create Dnorm column, and corresponding error column
-df['Dnorm'] = df.D/df.ctdi
-df['Dnormerr'] = df.Derr*df.D/df.ctdi
+        if dd_df == 'default':
+            self.dd_list = [[80,'dat/dd/100.xlsx'],
+                            [100,'dat/dd/100.xlsx'],
+                            [120,'dat/dd/120.xlsx'],
+                            [140,'dat/dd/140.xlsx']]
+        else:
+            for 
+            
+            
+            
+            
+            self.dd_list = dd_list
+        if bt_df == 'default':
+            defaulty = []
+            kvs = [80,100,120,140]
+            types = ['body','head']
+            bt_dir = 'dat/bowtie/'
+            for kv in kvs:
+                for filt in types:
+                    defaulty.append([filt,kv,bt_dir+filt+'.csv'])
+            
+            self.bt_list = defaulty
+        else:
+            self.bt_list = bt_list
 
 
-#%%   
-#Get geometry data from pathlength file:
-df['ksize'] = df.apply(lambda x: pl.relative_dose(x['r'], x['r'], x['kvp'], x['filt']), axis=1)
-df['kangle'] = df.apply(lambda x: pl.relative_dose_to_front(x['r'], x['r'], x['kvp'], x['filt'], x['angle']/180*np.pi), axis=1)
+
+
+
+
+
+
+
+    
+
+
+
+
+        
 
 #%%
 #Fit functions
@@ -131,13 +166,8 @@ def fkcoll(A,X):
     Aa,Ab=A[3],A[4]
     l0,l,kvp=X[0],X[1],X[2]
     return 1/(1+np.log(l/l0)/(Aa+Ab*(kvp-80)/60))
-#%%
-#Fit to the measured data
 
-#We only want to fit to measurements at r=16 and angle =0
-Amask = (df.r==16) & (df.angle==0) & (df.name!='ctdi1402') & (df.type=='ax')
-dfA = df[Amask]
-
+#Combined fit function
 #Three parameter fit, with C as residual
 
 def Afit(A,X):
@@ -147,408 +177,386 @@ def Afit(A,X):
     kcoll = fkcoll(A,X)
     klength = fklength(A,X)
     return C * kcoll * klength
-AA=[.4,.9,-.22,8,-.914]
-AA2 = [ 0.858595 ,   0.02192678, 0.00661411,  6.28199231 , 2.68660476]
 
-cA = c(name='axfit',l=(dfA.l0,dfA.l,dfA.kvp),D=dfA.Dnorm,sigma=dfA.Dnormerr, fitfunc = Afit,guess = AA2, xlabel = 'Scan length (mm)')
-#dcA.show_fit()	
-
-X=[df.l0,df.l,df.kvp]
-df['klength'] = fklength(cA.A,X)
-df['kcoll'] = fkcoll(cA.A,X)
-
-
-#%%
-
-#Compenaste for helical mode
-
-#Calculated over-rang for helical scans
-m=df.type=='hel'
-t = df.l+df.l0*df.p/2
-t[~m]=df.l[~m]
-X=[df.l0,t,df.kvp]
-df['klength'] = fklength(cA.A,X)
+#Function for running the fit, returns a fitted calibration class object
+def fit_data(df,name):
+    Amask = (df.lr==16) & (df.angle==0) & (df.name!='ctdi1402') & (df.type=='ax')
+    dfA = df[Amask]
+    Aguess = [ 0.858595 ,   0.02192678, 0.00661411,  6.28199231 , 2.68660476]
+    cA = c(name=name,l=(dfA.l0,dfA.l,dfA.kvp),D=dfA.Dnorm,sigma=dfA.Dnormerr, fitfunc = Afit,guess = Aguess, xlabel = 'Scan length (mm)')
+    return cA
 
 
 
 
 
-df['final']=df.Dnorm/df.klength/df.kcoll/df.ksize/df.p
-
-#%%
-masky = df.angle==0
-print(df.final[masky].std()/df.final[masky].mean())
-
-#color to kvp
-#scan length to shape
-kvps = (80,100,120,140)
-colors = ('C0','C1','C2','C3')
-#kvpcol = (1,2,3,4)
-ls = ((20,'x'),(40,'o'),(120,'+'))
-#lshape = ('x','o','+')
-
-fig,ax = plt.subplots()
-
-ax.axhline(y=1, xmin=0, xmax=1, linestyle = '--',color = 'k',zorder=6)
-
-seps = np.array([-5,38.5,46.5,49.5,55])
-xticks = (seps[:-1]+seps[1:])/2
-
-rs = ['32 (CTDI body)','16 (Head)','20','40']
-for i,x in enumerate(seps):
-    if i%2==1:
-        ax.axvspan(seps[i-1],seps[i], alpha=0.15, color='grey')
-
-ax.set_xticks(xticks)
-ax.set_xticklabels(rs)
-
-ax.set_xlabel('Phantom diameter/type (cm)')
-
-
-ax.set_xlim((-2,54))
-for i,kvp in enumerate(kvps):
-    for l,shape in ls:
-        m = (df.kvp==kvp)&(df.l==l) & (df.angle==0)& (df.type=='ax')
-        ax.errorbar(df.index[m],df.final[m]/cA.A[0],df.Derr[m],marker=shape,linestyle='',color=colors[i],zorder =1)
-
-#        plt.plot()
-
-testh = [mpatches.Patch(color = colors[i],label = str(kvps[i])+' kVp') for i ,k in enumerate(kvps)]
-testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm scan length') for i ,l in enumerate(ls)]
-
-ax.legend(handles = testh+testi,ncol=2,fancybox=True)
-#ax.set_ylim([.65,1.35])
-ax.set_ylabel('Measured/predicted surface dose')
-
-fig.tight_layout()
-fig.savefig('out/'+'datavsmodel.png',format='png',dpi=300)
-fig.savefig('out/'+'datavsmodel.pdf',format='pdf',dpi=600)
-plt.show()
-plt.close()
-print((df.final[Amask]).std()/(df.final[Amask]).mean())
-#%%
-
-fig,ax = plt.subplots()
-
-kvps = (80,100,120,140)
-
-colls = (20,40,120)
-colors = ('C0','C1','C2','C3')
-#kvpcol = (1,2,3,4)
-ls = ((10,'x'),(20,'o'),(40,'+'))
-
-
-
-
-seps = np.array([-5,7.5,15.5,23.5,36])
-xticks = (seps[:-1]+seps[1:])/2
-
-rs = ['80 kVp','100 kVp','120 kVp','140 kVp']
-for i,x in enumerate(seps):
-    if i%2==1:
-        ax.axvspan(seps[i-1],seps[i], alpha=0.15, color='grey')
-
-
-ax.set_xlim((-2,36))
-ax.set_ylim((.9,2))
-
-ax.set_xticks(xticks)
-ax.set_xticklabels(rs)
-ax.set_xlabel('Beam energy')
 
 
 
 
 
-masky = (df.r==16) & (df.angle==0)& (df.type=='ax')
-testdf = df[masky].sort_values(by=['kvp','l','l0'])
-
-for i,coll in enumerate(colls):
-    for l,shape in ls:
-        m = (testdf.l==coll)&(testdf.l0==l)
-        ax.errorbar(testdf.reset_index().index[m],testdf.Dnorm[m],testdf.Dnorm[m]*testdf.Derr[m],marker=shape,linestyle='',color=colors[i],zorder =1)
-
-#        plt.plot()
-
-testh = [mpatches.Patch(color = colors[i],label = str(colls[i])+' mm scan length') for i ,k in enumerate(colls)]
-testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm coll.') for i ,l in enumerate(ls)]
-
-ax.legend(handles = testh+testi,ncol=2,fancybox=True)
-#ax.set_ylim([.65,1.3])
-ax.set_ylabel(r'Surface dose/CTDI$_{vol}$')
-
-fig.tight_layout()
-fig.savefig('out/'+'ctdidata.pdf',format='pdf',dpi=600)
-plt.show()
-plt.close()
-print((df.final[Amask]).std()/(df.final[Amask]).mean())
 
 #%%
+#Create new calibration based on measured data
+def make_fit(skin_data_fn,name,dd_list='default',bt_list='default'):
+    #Load the data set
+    df = pd.read_excel(skin_data_fn)
 
-masky = (df.angle==0)&(df.r==16) & (df.name!='ctdi1402')& (df.type=='ax')#&(df.l==df.l0)
+    #create Dnorm column, and corresponding error column
+    df['Dnorm'] = df.D/df.ctdi
+    df['Dnormerr'] = df.Derr*df.D/df.ctdi
 
-x = np.linspace(0,120,120)
-
-fig,ax = plt.subplots()
-
-kvs = [80,100,120,140]
-colors = [0,1,2,3]
-for i, kv in enumerate(kvs):
-    y = fklength((cA.A),(x,x,kv))
-    ax.plot(x,y,label = str(kv)+' kVp',color='C'+str(i))
-    m=masky&(df.kvp==kv)&(df.l==df.l0)
-    ax.errorbar(df.l[m],df.Dnorm[m]/df.kcoll[m]/cA.A[0],(df.Derr*df.Dnorm/cA.A[0])[m],fmt='o',color='C'+str(i),alpha=.6,label='_nolegend_')
+    #Apply the fit function
+    cA = fit_data(df,name)
+    cDevices = device_settings(dd_list = dd_list,bt_list = bt_list)
     
-ax.legend()
-ax.set_ylabel(r'Scan length correction factor $k_{length}$')
-ax.set_xlabel('Scan length (mm)')
-fig.savefig('out/'+'klength.pdf',format='pdf',dpi=600)
-plt.show()
-plt.close()
-
-#%%
-
-
-
-
-
-#%%
-
-
-masky = (df.angle==0)&(df.l==df.l0)&(df.r==16)
-
-x = np.linspace(1,16,50)
-
-fig,ax = plt.subplots()
-
-kvs = [80,100,120,140]
-for i, kv in enumerate(kvs):
-    y = fkcoll((cA.A),(1,x,kv))
-    ax.plot(x,y,label = str(kv)+' kVp',color='C'+str(i))
-    m=masky&(df.kvp==kv)
-#    ax.errorbar(df.l[m],df.Dnorm[m]/cA.A[0],(df.Derr*df.Dnorm/cA.A[0])[m],fmt='o',color='C'+str(i),alpha=.6)
-
-#ax.set_ylim((0,1))
-ax.legend()
-ax.set_ylabel(r'Collimation correction factor $k_{coll}$')
-ax.set_xlabel('Number of rotations (n)')
-fig.savefig('out/'+'kcoll.pdf',format='pdf',dpi=600)
-plt.show()
-plt.close()
-
-
-#%%
-#Plot helical mode points
-
-#plt.plot(df.final[m]/cA.A[0],'o')
-
-#Calculated over-rang for helical scans
-m=df.type=='hel'
-X=[df.l0,t,df.kvp]
-df['klength'] = fklength(cA.A,X)
-
-
-
-#color to kvp
-#scan length to shape
-kvps = (80,100,120,140)
-es = (0,50,75)
-colors = ('C0','C1','C2')
-#kvpcol = (1,2,3,4)
-ls = ((20,'x'),(40,'o'))
-#lshape = ('x','o','+')
-
-fig,ax = plt.subplots()
-
-ax.axhline(y=1, xmin=0, xmax=1, linestyle = '--',color = 'k',zorder=6)
-#
-seps = np.array([53.5,55.5,57.5,59.5,61.5])
-xticks = (seps[:-1]+seps[1:])/2
-#
-rs = ['80 kVp','100 kVp','120 kVp','140 kVp']
-for i,x in enumerate(seps):
-    if i%2==1:
-        ax.axvspan(seps[i-1],seps[i], alpha=0.1, color='grey')
-
-ax.set_xticks(xticks)
-ax.set_xticklabels(rs)
-
-ax.set_xlabel('Peak beam energy (kV)')
-
-
-ax.set_xlim((53.5,61.5))
-
-for i,e in enumerate(es):
-    t = df.l+df.l0*df.p*e/100
-    X = [df.l0,t,df.kvp]
-    klength = fklength(cA.A,X)
-    final=df.Dnorm/klength/df.kcoll/df.ksize/df.p
     
-    for l,shape in ls:
-        m = (df.l0==l) & (df.angle==0)& (df.type=='hel')
-        ax.errorbar(df.index[m],final[m]/cA.A[0],df.Derr[m]*0,marker=shape,linestyle='',color='C'+str(i),zorder =1)
-
-#        plt.plot()
-
-testh = [mpatches.Patch(color = colors[i],label = 'e = '+str(es[i])+'%') for i ,k in enumerate(colls)]
-testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm collimation') for i ,l in enumerate(ls)]
-
-
-
-ax.legend(handles = testh+testi,ncol=2,fancybox=True)
-ax.set_ylim([.65,1.35])
-ax.set_ylabel('Measured/predicted surface dose')
-
-fig.tight_layout()
-fig.savefig('out/'+'hel.pdf',format='pdf',dpi=600)
-plt.show()
-plt.close()
+    
+    df = apply_fit(df,cA,cDevices)
+    
+    #If we're calibrating, we can get one final value:
+    #Calculate ratio of measured to predicted
+    df['final'] = df.D/df.predict
+    pickle.dump([cA,cDevices],open('fit/'+name+'.fit','wb'))
+    
+    
+    plot_fit(df,cA)
+    return df,cA,cDevices
 
 
 
 
-
-#%%
-
-
-delas = pd.read_excel('delas.xlsx')
-delas['ksize'] = delas.apply(lambda x: pl.relative_dose(x['r'], x['r'], x['kvp'], x['filt']), axis=1)
-delas['final'] = delas.D/delas.ctdi/Afit(cA.A,[delas.l0,delas.l,delas.kvp])
-delas['predict'] = Afit(cA.A,[delas.l0,delas.l,delas.kvp])
-delas.to_excel('delas.xlsx')
-
-#%%
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#%%
-fwfghads
-def fit(A,X):
-    #X:[l0,l,kvp]
-    #A:[C,ma,mb,Aa,Ab]
-    C=A[0]
-    kcoll = fkcoll(A[1:3],X)
-    klength = fklength(A[3:])
-    return C * kcoll * klength
-
+def load_fit(fn):
+    try:
+        fit = pickle.load(open(fn,'rb'))
+    except:
+        'Could not load fit'
+    return fit
+    
     
 
+#Predict dose based on values in a pandas structure
+def apply_fit(df,cA,cDevices):
 
-#%%
-fwfghads
+    #Set the bowtie and dd data in pl
+    pl.Devices.set_bt_list(cDevices.bt_list)
+    pl.Devices.set_dd_list(cDevices.dd_list)
+    
+    #Get geometry data from pathlength file:
+    df['ksize'] = get_ksize(df)
 
-#%%
-m1 = .127
-m2 = .021
-x=np.linspace(0,300,300)
-y1 = np.exp(-x*m1)
-y2 = np.exp(-x*m2)
-cc = 1/1.1
-plt.plot((2-y1-y2)*cc)
-mask = (df.r==16)&(df.l==df.l0)&(df.angle==0)
-plt.plot(df.l[mask],(df.D/df.ctdi)[mask],'x')
+    df['kangle'] = get_kangle(df)
 
+    
+    #Extend length for helical scans to compensate for over-ranging
+    m=df.type=='hel'
+    t = df.l+df.l0*df.p/2
+    t[~m]=df.l[~m]
+    X=[df.l0,t,df.kvp]
+    
+    #Find length and collimation functions    
+    X=[df.l0,df.l,df.kvp]
+    df['klength'] = fklength(cA.A,X)
+    df['kcoll'] = fkcoll(cA.A,X)
+    
+    df['kall'] = cA.A[0]*df.klength*df.kcoll*df.ksize*df.kangle*df.p
+    
+    #Calculate dose prediction
+    df['predict'] = df.ctdi*df.kall
 
-#%%
-#Find remaining value
-t=np.array(df.final[(df.angle==0)&(df.r==16)])
+    return df
 
-
-#%%
-masky = (df.angle==0)&(df.l==df.l0)&(df.r==16)
-
-df['colled']=df.Dnorm/df.kcoll
-df['colled'][masky]
-
-#%%
-
-
-
-
-
-l=np.linspace(0,1500,500)
-l0 = 40
-kvp = 120
-
-t1 = Afit(cA.A,(l0,l,kvp))
-plt.plot(t1)
-
-#%%
-ddf = pd.read_excel('predict.xlsx')
 
 
 def get_ksize(idf):
     ksize = idf.apply(lambda x: pl.relative_dose(x['ap'], x['lr'], x['kvp'], x['filt']), axis=1)
+    return ksize
+
+def get_kangle(idf):
     kangle = idf.apply(lambda x: pl.relative_dose_to_front(x['ap'], x['lr'], x['kvp'], x['filt'], x['angle']/180*np.pi), axis=1)
-    return ksize,kangle
+    return kangle
 
 
 
-def predict(idf,ic):
-
-    X=[idf.l0,idf.l,idf.kvp]
-    idf['klength'] = fklength(ic.A,X)
-    idf['kcoll'] = fkcoll(ic.A,X)
-    idf['ksize'],idf.kangle = get_ksize(idf)
-    idf['kall'] = ic.A[0]*idf.klength*idf.kcoll*idf.ksize*idf.kangle*idf.p
-    idf['predict'] = idf.ctdi*idf.kall
-    print(idf)
-    return idf
+def predict(df,fit_fn):
+    cA,cDevices = load_fit(fit_fn)
+    df = apply_fit(df,cA,cDevices)
+    return df
 
 
-ddf = predict(ddf,cA)
+    
 
 
-
-
+#Only do the rest of this stuff if plotting is enabled
 #%%
-maskm = (df.l==df.l0)&(df.angle==0)&(df.r==16)
-dfm = df[maskm]
+#plotting=True
 
-def mfit(A,X):
-    l0 = X[0]
-    kvp = X[1]
-    C=A[0]
-    ma=A[1]
-    mb = A[2]
-    return (C+A[3]*kvp)*(1-np.exp(-l0*(ma+mb*kvp)))
-              
-Am=[1.5,0.15,-0.0007,.01]
+def plot_fit(df,cA):
+    
+    
+    #Plot the ratio of predicted to measured values
+    masky = df.angle==0
+    print(df.final[masky].std()/df.final[masky].mean())
+    
+    #color to kvp
+    #scan length to shape
+    kvps = (80,100,120,140)
+    colors = ('C0','C1','C2','C3')
+    #kvpcol = (1,2,3,4)
+    ls = ((20,'x'),(40,'o'),(120,'+'))
+    #lshape = ('x','o','+')
+    
+    fig,ax = plt.subplots()
+    
+    ax.axhline(y=1, xmin=0, xmax=1, linestyle = '--',color = 'k',zorder=6)
+    
+    seps = np.array([-5,38.5,46.5,49.5,55])
+    xticks = (seps[:-1]+seps[1:])/2
+    
+    rs = ['32 (CTDI body)','16 (Head)','20','40']
+    for i,x in enumerate(seps):
+        if i%2==1:
+            ax.axvspan(seps[i-1],seps[i], alpha=0.15, color='grey')
+    
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(rs)
+    
+    ax.set_xlabel('Phantom diameter/type (cm)')
+    
+    
+    ax.set_xlim((-2,54))
+    for i,kvp in enumerate(kvps):
+        for l,shape in ls:
+            m = (df.kvp==kvp)&(df.l==l) & (df.angle==0)& (df.type=='ax')
+            ax.errorbar(df.index[m],df.final[m],df.Derr[m],marker=shape,linestyle='',color=colors[i],zorder =1)
+    
+
+    
+    testh = [mpatches.Patch(color = colors[i],label = str(kvps[i])+' kVp') for i ,k in enumerate(kvps)]
+    testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm scan length') for i ,l in enumerate(ls)]
+    
+    ax.legend(handles = testh+testi,ncol=2,fancybox=True)
+    #ax.set_ylim([.65,1.35])
+    ax.set_ylabel('Measured/predicted surface dose')
+    
+    fig.tight_layout()
+    fig.savefig('out/'+'datavsmodel.png',format='png',dpi=300)
+    fig.savefig('out/'+'datavsmodel.pdf',format='pdf',dpi=600)
+    plt.show()
+    plt.close()
+    #print((df.final[Amask]).std()/(df.final[Amask]).mean())
+    
+#a = make_fit('dat/ge_optima_660_raw.xlsx','ge_optima_660')
+    
+    
+    #%%
+if plotting:
+    #Plot the raw data 
+    
+    fig,ax = plt.subplots()
+    
+    kvps = (80,100,120,140)
+    
+    colls = (20,40,120)
+    colors = ('C0','C1','C2','C3')
+    #kvpcol = (1,2,3,4)
+    ls = ((10,'x'),(20,'o'),(40,'+'))
+    
+    
+    
+    
+    seps = np.array([-5,7.5,15.5,23.5,36])
+    xticks = (seps[:-1]+seps[1:])/2
+    
+    rs = ['80 kVp','100 kVp','120 kVp','140 kVp']
+    for i,x in enumerate(seps):
+        if i%2==1:
+            ax.axvspan(seps[i-1],seps[i], alpha=0.15, color='grey')
+    
+    
+    ax.set_xlim((-2,36))
+    ax.set_ylim((.9,2))
+    
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(rs)
+    ax.set_xlabel('Beam energy')
+    
+    
+    
+    
+    
+    masky = (df.r==16) & (df.angle==0)& (df.type=='ax')
+    testdf = df[masky].sort_values(by=['kvp','l','l0'])
+    
+    for i,coll in enumerate(colls):
+        for l,shape in ls:
+            m = (testdf.l==coll)&(testdf.l0==l)
+            ax.errorbar(testdf.reset_index().index[m],testdf.Dnorm[m],testdf.Dnorm[m]*testdf.Derr[m],marker=shape,linestyle='',color=colors[i],zorder =1)
+    
+    #        plt.plot()
+    
+    testh = [mpatches.Patch(color = colors[i],label = str(colls[i])+' mm scan length') for i ,k in enumerate(colls)]
+    testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm coll.') for i ,l in enumerate(ls)]
+    
+    ax.legend(handles = testh+testi,ncol=2,fancybox=True)
+    #ax.set_ylim([.65,1.3])
+    ax.set_ylabel(r'Surface dose/CTDI$_{vol}$')
+    
+    fig.tight_layout()
+    fig.savefig('out/'+'ctdidata.pdf',format='pdf',dpi=600)
+    plt.show()
+    plt.close()
+    
+    
+    #%%
+    
+    #Plot klength, alonside a few data points
+    masky = (df.angle==0)&(df.r==16) & (df.name!='ctdi1402')& (df.type=='ax')#&(df.l==df.l0)
+    
+    x = np.linspace(0,120,120)
+    
+    fig,ax = plt.subplots()
+    
+    kvs = [80,100,120,140]
+    colors = [0,1,2,3]
+    for i, kv in enumerate(kvs):
+        y = fklength((cA.A),(x,x,kv))
+        ax.plot(x,y,label = str(kv)+' kVp',color='C'+str(i))
+        m=masky&(df.kvp==kv)
+        ax.errorbar(df.l[m],df.Dnorm[m]/df.kcoll[m]/cA.A[0],(df.Derr*df.Dnorm/cA.A[0])[m],fmt='o',color='C'+str(i),alpha=.6,label='_nolegend_')
+        
+    ax.legend()
+    ax.set_ylabel(r'Scan length correction factor $k_{length}$')
+    ax.set_xlabel('Scan length (mm)')
+    fig.savefig('out/'+'klength.pdf',format='pdf',dpi=600)
+    plt.show()
+    plt.close()
+    
+    #%%
+    
+    
+    
+    
+    
+    #%%
+    #Plot kcoll, it doesn't really make sense to add data points to this plot
+    
+    masky = (df.angle==0)&(df.l==df.l0)&(df.r==16)
+    
+    x = np.linspace(1,16,50)
+    
+    fig,ax = plt.subplots()
+    
+    kvs = [80,100,120,140]
+    for i, kv in enumerate(kvs):
+        y = fkcoll((cA.A),(1,x,kv))
+        ax.plot(x,y,label = str(kv)+' kVp',color='C'+str(i))
+        m=masky&(df.kvp==kv)
+    #    ax.errorbar(df.l[m],df.Dnorm[m]/cA.A[0],(df.Derr*df.Dnorm/cA.A[0])[m],fmt='o',color='C'+str(i),alpha=.6)
+    
+    #ax.set_ylim((0,1))
+    ax.legend()
+    ax.set_ylabel(r'Collimation correction factor $k_{coll}$')
+    ax.set_xlabel('Number of rotations (n)')
+    fig.savefig('out/'+'kcoll.pdf',format='pdf',dpi=600)
+    plt.show()
+    plt.close()
+    
+    
+    #%%
+    #Plot helical mode points
+    
+    #plt.plot(df.final[m]/cA.A[0],'o')
+    
+    #Calculated over-rang for helical scans
+    m=df.type=='hel'
+    X=[df.l0,t,df.kvp]
+    df['klength'] = fklength(cA.A,X)
+    
+    
+    
+    #color to kvp
+    #scan length to shape
+    kvps = (80,100,120,140)
+    es = (0,50,75)
+    colors = ('C0','C1','C2')
+    #kvpcol = (1,2,3,4)
+    ls = ((20,'x'),(40,'o'))
+    #lshape = ('x','o','+')
+    
+    fig,ax = plt.subplots()
+    
+    ax.axhline(y=1, xmin=0, xmax=1, linestyle = '--',color = 'k',zorder=6)
+    #
+    seps = np.array([53.5,55.5,57.5,59.5,61.5])
+    xticks = (seps[:-1]+seps[1:])/2
+    #
+    rs = ['80 kVp','100 kVp','120 kVp','140 kVp']
+    for i,x in enumerate(seps):
+        if i%2==1:
+            ax.axvspan(seps[i-1],seps[i], alpha=0.1, color='grey')
+    
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(rs)
+    
+    ax.set_xlabel('Peak beam energy (kV)')
+    
+    
+    ax.set_xlim((53.5,61.5))
+    
+    for i,e in enumerate(es):
+        t = df.l+df.l0*df.p*e/100
+        X = [df.l0,t,df.kvp]
+        klength = fklength(cA.A,X)
+        final=df.Dnorm/klength/df.kcoll/df.ksize/df.p
+        
+        for l,shape in ls:
+            m = (df.l0==l) & (df.angle==0)& (df.type=='hel')
+            ax.errorbar(df.index[m],final[m]/cA.A[0],df.Derr[m]*0,marker=shape,linestyle='',color='C'+str(i),zorder =1)
+    
+    #        plt.plot()
+    
+    testh = [mpatches.Patch(color = colors[i],label = 'e = '+str(es[i])+'%') for i ,k in enumerate(colls)]
+    testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm collimation') for i ,l in enumerate(ls)]
+    
+    
+    
+    ax.legend(handles = testh+testi,ncol=2,fancybox=True)
+    ax.set_ylim([.65,1.35])
+    ax.set_ylabel('Measured/predicted surface dose')
+    
+    fig.tight_layout()
+    fig.savefig('out/'+'hel.pdf',format='pdf',dpi=600)
+    plt.show()
+    plt.close()
+    
+    
+    
+    
+    
+    #%%
+    #Check against the delas heras data set
+    
+    delas = pd.read_excel('delas.xlsx')
+    delas['ksize'] = delas.apply(lambda x: pl.relative_dose(x['r'], x['r'], x['kvp'], x['filt']), axis=1)
+    delas['final'] = delas.D/delas.ctdi/Afit(cA.A,[delas.l0,delas.l,delas.kvp])
+    delas['predict'] = Afit(cA.A,[delas.l0,delas.l,delas.kvp])
+    delas.to_excel('delas.xlsx')
+    
+    #%%
+    
 
 
-cm=c(np.row_stack((dfm.l0,dfm.kvp)),dfm.Dnorm,sigma=dfm.Dnormerr,fitfunc = mfit,name = 'm fit',guess = Am, xlabel = 'Beam collimation (mm)')
 
-x=np.linspace(0,40,40)
-kvs = [80,100,120,140]
-plt.errorbar(dfm.l,dfm.Dnorm,dfm.Dnormerr,fmt='x')
-for kv in kvs:
-    plt.plot(x,mfit(cm.A,[x,kv]),label=str(kv))
-plt.legend()
 
-plt.show()
 
-df['kcoll'] = mfit(cm.A,(df.l0,df.kvp))/cm.A[0]
 
-def Afit(A,X):
-    #X:[l0,l,kvp]
-    #A:[asym1,asym2,A]
-    C=A[0]
-    kasym = fkasym(A[1:3],X[1:])
-    kcoll = fkcoll([A[3]],X[0:3])
-    D = C*kcoll*kasym
-    return D
 
-AA=[1.37,0.024,-0.000035,2]
+
+
+
+
+
+
+
+
