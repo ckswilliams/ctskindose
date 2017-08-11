@@ -116,16 +116,21 @@ class DD():
         d=d[d<15][maxindex:]
         self.d=d
         self.D = D
+        self.fit_cutoff = 0.7
+        self.dose_cutoff = 0.9
         self.fit_exp()
     
     def fit_exp(self):
-        self.m,self.A = np.polyfit(self.d[self.d>np.max(self.d)/3], np.log(self.D[self.d>np.max(self.d)/3]), 1)
-        self.A = self.A+1
+        cutoff_mask = self.d > np.max(self.d)*self.fit_cutoff
+        plt.show()
+        self.m,self.A = np.polyfit(self.d[cutoff_mask], np.log(self.D[cutoff_mask]), 1)
+        self.A = np.exp(self.A)
+        
         
     def get_D(self,d):
         d = np.array(d)
         #Make mask showing which lengths are below about 10
-        mask = d<=np.max(self.d)/2
+        mask = d<=np.max(self.d)*self.dose_cutoff
         #Make an empty array
         dose = np.zeros(d.shape)
         #For lengths below ~10, use interpolation
@@ -136,7 +141,7 @@ class DD():
     
     def get_d(self,D):
         D=np.array(D)
-        Dcutoff = self.get_D(np.max(self.d)*3/4)
+        Dcutoff = self.get_D(np.max(self.d)*self.dose_cutoff)
         mask = D>Dcutoff
         d = np.zeros(D.shape)
         d[mask]=np.interp(D[mask],self.D[::-1],self.d[::-1])
@@ -267,11 +272,11 @@ Devices.set_dd_list(default_dds)
 Devices.set_bt_list(default_bts)
   
     
-def plot_bowties():
+def plot_bowties(Devices=Devices):
 #    fig, axes = plt.subplots(nrows=1, ncols=2,sharey=True, figsize=(9, 4))# , sharex=True, sharey=True)
     fig,ax = plt.subplots()
-    for i,btname in enumerate(bt):
-        ax.plot(bt[btname].phi*180/np.pi,bt[btname].I,label = btname.capitalize()+' filter')
+    for i,btname in enumerate(Devices.bt):
+        ax.plot(Devices.bt[btname][120].phi*180/np.pi,Devices.bt[btname][120].I,label = btname.capitalize()+' filter')
     ax.set_xlabel(r'Angular offset from central axis ($\phi^{\circ}$)')
     ax.set_ylabel('Relative intensity')
     ax.legend(loc=1)
@@ -280,6 +285,25 @@ def plot_bowties():
     fig.savefig('out/bowties.eps',format='eps',dpi=600)
     plt.show()
 #plot_bowties()
+
+def plot_dds(Devices=Devices):
+    fig,ax = plt.subplots()
+    for i,ddname in enumerate(Devices.dd):
+        ax.plot(Devices.dd[ddname].d,Devices.dd[ddname].get_D(Devices.dd[ddname].d),label = str(ddname)+' kVp')
+#        ax.plot(Devices.dd[ddname].d,Devices.dd[ddname].D,label = str(ddname)+' kVp')
+    ax.set_xlabel(r'Depth in water (cm))')
+    ax.set_ylabel('Relative dose')
+    ax.legend(loc=1)
+#    ax.yaxis.set_major_formatter(plt.NullFormatter())
+    ax.set_ybound(lower = 0)
+    fig.tight_layout()
+    fig.savefig('out/dds.eps',format='eps',dpi=600)
+    plt.show()
+    
+
+    
+    
+#plot_dds()
 
 
 #%%
@@ -353,9 +377,14 @@ def plot_dose(name,theta,dose,ax):
     #plt.savefig('out/'+name+'_dose.eps', format='eps', dpi=600)
     #plt.show()
     
- 
+
+
+
+
 
 #%%
+
+
 #Run for a few set shapes 
 def make_geo_plots():
     geos = [(16,16),(8,8),(8,16),(16,8)]
@@ -371,7 +400,7 @@ def make_geo_plots():
         LR = geos[i][1]
         name = str(AP)+'_'+str(LR)
         data,ishape = get_geo(AP,LR)
-        dose = dose_series(dd['120'],bt['body'],ishape,*data)
+        dose = dose_series(Devices.dd[120],Devices.bt['body'][120],ishape,*data)
         
         plot_geo(name,*data,axes[i][0])
         plot_dose(name,data[0],dose,axes[i][1])
@@ -393,6 +422,8 @@ def make_geo_plots():
     rc('text', usetex=False)
     
         
+    
+    
 #make_geo_plots()
 
 #%%
@@ -400,7 +431,7 @@ def make_kvp_plots():
     geoAP = np.linspace(1,50,50)
     geoLR = np.linspace(1,50,50)
 
-    for ddname in dd.keys():
+    for ddname in Devices.dd.keys():
         doses = total_dose_series(geoAP,geoLR,ddname,'body')/total_dose(16,16,ddname,'body')
         doses2 = total_dose_series(geoAP,geoAP*1.45,ddname,'body')/total_dose(16,16,ddname,'body')
         plt.plot(geoAP*2,doses,label='Cylindrical phantom')
@@ -415,7 +446,8 @@ def make_kvp_plots():
     
         #Show background objects
         add_patient_size(ax)
-        plt.savefig('out/totdose_'+ddname+'.pdf',format='pdf',dpi=600)
+        plt.tight_layout()
+        plt.savefig('out/totdose_'+str(ddname)+'.pdf',format='pdf',dpi=600)
         plt.show()
         
 
@@ -448,10 +480,10 @@ def make_shape_plots():
     dose_list = {}
     for shape in shapes:
         dose_list[shape[2]] = {}
-        for ddname in dd.keys():
+        for ddname in Devices.dd.keys():
             doses = total_dose_series(geoAP*shape[0],geoLR*shape[1],ddname,'body')
             dose_list[shape[2]][ddname] =doses
-            plt.plot(geoAP*2,doses,label=ddname + ' kVp')
+            plt.plot(geoAP*2,doses,label=str(ddname) + ' kVp')
 
         ax = plt.axes()
         ax.yaxis.set_major_formatter(plt.NullFormatter())
@@ -460,7 +492,7 @@ def make_shape_plots():
         plt.ylim(ymin=0)
         plt.legend(loc=2)
         
-
+        plt.tight_layout()
         plt.savefig('out/totdose_'+shape[2]+'.pdf',format='pdf',dpi=600)
         plt.show()
         
@@ -477,6 +509,7 @@ def make_shape_ratio_plots(data = False):
     plt.ylabel('Surface intensity ratio')
     plt.xlabel('Major axis phantom diameter')
     plt.legend(['80 kVp','100 kVp', '120 kVp'],loc = 1)
+    plt.tight_layout()
     plt.savefig('out/shaperatio.eps',format='eps',dpi=600)
     
     return data
@@ -484,3 +517,26 @@ def make_shape_ratio_plots(data = False):
 #make_kvp_plots()
 #test = make_shape_ratio_plots(test)
 #%%
+
+
+#t,y = get_geo(16,16)
+#fig,ax = plt.subplots()
+#plot_geo('test',*t,ax=ax)
+#
+#ax.set_xlabel(r'Source angle ($^{\circ}$)')
+#ax.set_ylabel(r'Angle ($^{\circ}$),distance (cm)')
+#fig.tight_layout()
+#fig.savefig('out/16_16.eps',format='eps',dpi=600)
+##%%
+#
+#dose = dose_series(Devices.dd[120],Devices.bt['body'][120],y,*t)
+#
+#
+#fig,ax = plt.subplots()
+#plot_dose('test',t[0],dose,ax)
+#ax.set_xlabel(r'Source angle ($^{\circ}$)')
+#ax.set_ylabel(r'Relative dose')
+#fig.tight_layout()
+#fig.savefig('out/16_16_dose.eps',format='eps',dpi=600)
+#
+#
