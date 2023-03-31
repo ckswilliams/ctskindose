@@ -41,6 +41,7 @@ def get_geo(AP,LR,angle=0,CT_rad = R):
     #Construct an input variable for angle, in radians
     theta = np.linspace(0,360,n_angles+1)
     thetar = theta/180*np.pi
+    
     #Vector from isocentre to source at each angle
     Q = np.array([R*np.sin(thetar),CT_rad*np.cos(thetar)])
     
@@ -297,7 +298,7 @@ def plot_dds(Devices=Devices):
 #    ax.yaxis.set_major_formatter(plt.NullFormatter())
     ax.set_ybound(lower = 0)
     fig.tight_layout()
-    fig.savefig('out/dds.eps',format='eps',dpi=600)
+    fig.savefig('out/dds.svg',format='svg',dpi=600)
     plt.show()
     
 
@@ -392,7 +393,7 @@ def make_geo_plots():
     shape_types = ['16 cm cylinder','8 cm cylinder','8 by 16 cm ellipse','16 by 8 cm ellipse']
     
     rows = len(geos)
-    rc('text', usetex=True)
+    #rc('text', usetex=True)
     fig, axes = plt.subplots(nrows=rows, ncols=2,sharex=True, figsize=(9, 9))# , sharex=True, sharey=True)
 
     for i,rows in enumerate(axes):
@@ -417,14 +418,14 @@ def make_geo_plots():
                 ax.set_ylabel('Relative dose')
 
     plt.tight_layout()
-    plt.savefig('out/geos_doses.eps',format='eps',dpi=600)
-    plt.show()
-    rc('text', usetex=False)
+    plt.savefig('out/geos_doses.svg',format='svg',dpi=600)
+    #plt.show()
+    #rc('text', usetex=False)
     
         
     
     
-#make_geo_plots()
+make_geo_plots()
 
 #%%
 def make_kvp_plots():
@@ -434,21 +435,21 @@ def make_kvp_plots():
     for ddname in Devices.dd.keys():
         doses = total_dose_series(geoAP,geoLR,ddname,'body')/total_dose(16,16,ddname,'body')
         doses2 = total_dose_series(geoAP,geoAP*1.45,ddname,'body')/total_dose(16,16,ddname,'body')
-        plt.plot(geoAP*2,doses,label='Cylindrical phantom')
-        plt.plot(geoAP*2,doses2,label = 'Ellipsoidal phantom')
-        ax = plt.axes()
+        fig, ax = plt.subplots()
+        ax.plot(geoAP*2,doses,label='Cylindrical phantom')
+        ax.plot(geoAP*2,doses2,label = 'Ellipsoidal phantom')
 #        ax.yaxis.set_major_formatter(plt.NullFormatter())
-        plt.ylabel(r'Size correction factor ($k_{size}$)')
-        plt.xlabel('Phantom AP diameter (cm)')
-        plt.ylim(ymin=0)
-        plt.axis([0,100,0.7,2])
-        plt.legend(loc=2)
+        ax.set_ylabel(r'Size correction factor ($k_{size}$)')
+        ax.set_xlabel('Phantom AP diameter (cm)')
+        ax.set_ylim(ymin=0)
+        ax.axis([0,100,0.7,2])
+        ax.legend(loc=2)
     
         #Show background objects
         add_patient_size(ax)
-        plt.tight_layout()
-        plt.savefig('out/totdose_'+str(ddname)+'.pdf',format='pdf',dpi=600)
-        plt.show()
+        fig.tight_layout()
+        fig.savefig('out/totdose_'+str(ddname)+'.svg',format='svg',dpi=600)
+        fig.show()
         
 
 def add_patient_size(ax):
@@ -493,7 +494,7 @@ def make_shape_plots():
         plt.legend(loc=2)
         
         plt.tight_layout()
-        plt.savefig('out/totdose_'+shape[2]+'.pdf',format='pdf',dpi=600)
+        plt.savefig('out/totdose_'+shape[2]+'.svg',format='svg',dpi=600)
         plt.show()
         
     return dose_list
@@ -510,12 +511,12 @@ def make_shape_ratio_plots(data = False):
     plt.xlabel('Major axis phantom diameter')
     plt.legend(['80 kVp','100 kVp', '120 kVp'],loc = 1)
     plt.tight_layout()
-    plt.savefig('out/shaperatio.eps',format='eps',dpi=600)
+    plt.savefig('out/shaperatio.svg',format='svg',dpi=600)
     
     return data
 
 #make_kvp_plots()
-#test = make_shape_ratio_plots(test)
+make_shape_plots()
 #%%
 
 
@@ -540,3 +541,74 @@ def make_shape_ratio_plots(data = False):
 #fig.savefig('out/16_16_dose.eps',format='eps',dpi=600)
 #
 #
+#
+
+
+#%%
+#aps = np.linspace(1,45,45)
+#lrs = np.linspace(1,45,45)
+#
+#apg,lrg = np.meshgrid(aps,lrs)
+#
+#def testf(ap,lr,kvp,filter):
+#    return relative_dose(ap,lr,kvp,filter)
+#testv = np.vectorize(testf)
+#
+#
+#
+#kvps = [80,100,120,140]
+#filters = ['head','body']
+#
+#out = {}
+#for kv in kvps:
+#    out[kv]={}
+#
+#for kv in kvps:
+#    out[kv]['body'] = testv(apg,lrg,kv,'body')
+#for kv in kvps:
+#    out[kv]['head'] = testv(apg,lrg,kv,'head')
+#    
+##%%
+#    
+#xl = pd.ExcelWriter('pldata.xlsx')
+#
+#for kv in kvps:
+#    for fil in filters:
+#        t = pd.DataFrame(out[kv][fil])
+#        t.to_excel(xl,
+#                            sheet_name = str(kv)+str(fil),
+#                            header = False,
+#                            index = False
+#                            )
+#    
+#    
+#    
+#    
+#    
+#xl.save()
+#    
+#    
+###%%
+##
+##from mpl_toolkits.mplot3d import Axes3D
+###%%
+##
+##fig = plt.figure()
+##ax = fig.add_subplot(111, projection='3d')
+##
+##ax.plot_surface(apg, lrg, t)
+##
+##ax.set_xlabel('AP Label')
+##ax.set_ylabel('LR Label')
+##ax.set_zlabel('ksize Label')
+##
+##plt.show()
+#
+##
+##%%
+##
+#crap = [out[80][i,i] for i in np.arange(30)]
+##%%
+#
+#i=16
+#plt.plot(apg[i,:],t[i,:])

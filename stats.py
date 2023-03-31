@@ -10,10 +10,10 @@ import numpy as np
 from matplotlib import pyplot as plt
 import math
 import pickle
+import itertools
 
 from matplotlib import patches as mpatches
 from matplotlib import lines as lines
-
 
 
 
@@ -37,7 +37,7 @@ class c():
             linear = odr.Model(self.v['fitfunc'])
             mydata = odr.RealData(self.v['l'], self.v['D'],sy=self.v['sigma'])
             myodr = odr.ODR(mydata, linear, beta0 = self.v['guess'],maxit=5000)
-    #        myodr.set_job(fit_type=2)
+            myodr.set_job(fit_type=2)
             myoutput = myodr.run()
             self.v['A']   = myoutput.beta
             self.A = myoutput.beta
@@ -101,7 +101,6 @@ class device_settings():
 #        bt_list = [(filter_type,kv,fn)]
 #        dd_list = [(kv,fn)]
 #           
-        
         if dd_df == 'default':
             self.dd_list = [[80,'dat/dd/100.xlsx'],
                             [100,'dat/dd/100.xlsx'],
@@ -111,10 +110,6 @@ class device_settings():
             for row in dd_df.iterrows():
                 print(row)
                 
-            
-            
-            
-            
             self.dd_list = dd_df
         if bt_df == 'default':
             defaulty = []
@@ -131,20 +126,13 @@ class device_settings():
 
 
 
-
-
-
-
-
-
-    
-
-
-
-
+from scipy.optimize import curve_fit
+class CF():
+    def __init__(self, func, D, X, guess, sigma=None):
+        self.A, self.v = curve_fit(func, X, D, guess, sigma, absolute_sigma=True)
         
 
-#%%
+#%% Original fit functions
 #Fit functions
 
 def fklength(A,X):
@@ -158,7 +146,7 @@ def fklength(A,X):
 #    return np.log(l*(ma+mb*(kvp-80)/60)+1)
 #    return 1-np.exp(-l**.5*a)
 #    return 2 - np.exp(-l*(ma+ma*t)) - np.exp(-l*(mb+mb*t))
-    return 1-np.exp(-l**.5*a)
+    return 1-np.exp(-l*a)
 
 #def fkasym(A,X):
 #    #X:l,kvp,asym
@@ -169,8 +157,11 @@ def fklength(A,X):
 def fkcoll(A,X):
     #X:[lcoll,l,kvp]
     Aa,Ab=A[3],A[4]
-    lcoll,l,kvp=X[0],X[1],X[2]
-    return 1/(1+np.log(l/lcoll)/(Aa+Ab*(kvp-80)/60))
+    lcoll,lscan,kvp=X[0],X[1],X[2]
+    return 1/(1+np.log(lscan/lcoll)/(Aa+Ab*(kvp-80)/60))
+
+
+
 
 #Combined fit function
 #Three parameter fit, with C as residual
@@ -181,39 +172,109 @@ def Afit(A,X):
     C=A[0]
     kcoll = fkcoll(A,X)
     klength = fklength(A,X)
+
     return C * kcoll * klength
 
 #Function for running the fit, returns a fitted calibration class object
 def fit_data(df,name):
-    Amask = (df.LR==16) & (df.angle==0) & (df.name!='ctdi1402') & (df.type=='ax')
+    Amask = (df.LR==16) & (df.angle==0) & (str(df.name) !='ctdi1402') & (df.scan_type=='ax')
     dfA = df[Amask]
-    Aguess = [ 0.858595 ,   0.02192678, 0.00661411,  6.28199231 , 2.68660476]
+    Aguess = [ 2.48866957,  0.13324515, -0.01845219,  7.47206539,  0.83062203]
     cA = c(name=name,l=(dfA.lcoll,dfA.lscan,dfA.kvp),D=dfA.Dnorm,sigma=dfA.Dnormerr, fitfunc = Afit,guess = Aguess, xlabel = 'Scan length (mm)')
     return cA
 
 
+#%% Testing fit functions
 
 
+def fklength(A,X):
+    '''
+    kVp-dependent fit function for total scan length
+    X:[l0,l,kvp] (beam width, scan length, kVp)
+    A:[c, c_penumbra, c_length, c_kvp]
+    '''
+    l = X[1]
+    c_penumbra = A[1]
+    c_length = A[2]
+    #return 1 + c_length*l
+    return 1-0.5*np.exp(-c_length*(l))
 
 
+#def fkasym(A,X):
+#    #X:l,kvp,asym
+#    asa,asb=A[0],A[1]
+#    l,kvp,asym = X[0],X[1],X[2]
+#    return 1/np.cosh((asa+asb*kvp)*l*asym)
+    
+def fkcoll(A,X):
+    '''
+    fit function for collimation
+    X:[l0,l,kvp] (beam width, scan length, kVp)
+    A:[c, c_penumbra, c_length, c_kvp]
+    '''
+    c_penumbra = A[1]
+    lcoll=X[0]
+    #return 1/(1+np.log(lscan/lcoll)/(Aa+Ab*(kvp-80)/60))
+    return lcoll / (lcoll + c_penumbra)
 
 
+def fkkvp(A,X):
+    '''
+    fit function for kvp
+    X:[l0,l,kvp] (beam width, scan length, kVp)
+    A:[c, c_penumbra, c_length, c_kvp]
+    '''
+    kvp = X[2]
+    c_kvp = A[3]
+    return 1-c_kvp*(kvp-70)/140
 
+def Afit(A,*X):
+    #X:[lcoll,l,kvp]
+    #A:[C,lcolla,lcollb,la,lb]
+    C=A[0]
+    kcoll = fkcoll(A,X)
+    klength = fklength(A,X)
+    kkvp = fkkvp(A,X)
+    return C * kcoll * klength * kkvp
+
+def fk_curvefit(X,*A):
+    #X:[lcoll,l,kvp]
+    #A:[C,lcolla,lcollb,la,lb]
+    C=A[0]
+    kcoll = fkcoll(A,X)
+    klength = fklength(A,X)
+    kkvp = fkkvp(A,X)
+    return C * kcoll * klength * kkvp
+
+#Function for running the fit, returns a fitted calibration class object
+def fit_data(df,name):
+    Amask = (df.LR==16) & (df.angle==0) & (str(df.name) !='ctdi1402') & (df.scan_type=='ax')
+    dfA = df[Amask]
+    #Aguess = [ 2.48866957,  0.13324515, -0.01845219,  7.47206539,  0.83062203]
+    Aguess = (1.6,4,.1,.1)# 4 parameter fit instead of 5
+    X = (dfA.lcoll,dfA.effective_lscan,dfA.kvp)
+    D = dfA.Dnorm
+    cA = CF(fk_curvefit, D,X,Aguess, dfA.Dnormerr)
+    #cA = c(name=name,l=X,D=dfA.Dnorm,sigma=dfA.Dnormerr, fitfunc = Afit,guess = Aguess, xlabel = 'Scan length (mm)')
+    return cA
 
 
 #%%
 #Create new calibration based on measured data
 def make_fit(skin_data_fn,name,dd_list='default',bt_list='default'):
     #Load the data set
+    
+    
     df = pd.read_excel(skin_data_fn)
 
     #create Dnorm column, and corresponding error column
     df['Dnorm'] = df.D/df.ctdi
     df['Dnormerr'] = df.Derr*df.D/df.ctdi
+    df['effective_lscan'] = df.lscan + (df.scan_type=='hel')*df.lcoll*df.pitch/2
 
     #Apply the fit function
     cA = fit_data(df,name)
-    cDevices = device_settings(dd_list = dd_list,bt_list = bt_list)
+    cDevices = device_settings()
     
     
     
@@ -221,11 +282,11 @@ def make_fit(skin_data_fn,name,dd_list='default',bt_list='default'):
     
     #If we're calibrating, we can get one final value:
     #Calculate ratio of measured to predicteded
-    df['predicted'] = df.D/df.predicted
+
     pickle.dump([cA,cDevices],open('fit/'+name+'.fit','wb'))
     
     
-    plot_fit(df,cA)
+    plot_fit(df)
     return df,cA,cDevices
 
 
@@ -249,6 +310,9 @@ def apply_fit(df,cA,cDevices):
     pl.Devices.set_bt_list(cDevices.bt_list)
     pl.Devices.set_dd_list(cDevices.dd_list)
     
+    df['Dnorm'] = df.D/df.ctdi
+    df['Dnormerr'] = df.Derr*df.D/df.ctdi
+    
     #Get geometry data from pathlength file:
     df['ksize'] = get_ksize(df)
 
@@ -256,20 +320,20 @@ def apply_fit(df,cA,cDevices):
 
     
     #Extend length for helical scans to compensate for over-ranging
-    m=df.type=='hel'
-    t = df.lscan+df.lcoll*df.pitch/2
-    t[~m]=df.lscan[~m]
-    X=[df.lcoll,t,df.kvp]
-    
+    df['effective_lscan'] = df.lscan + (df.scan_type=='hel')*df.lcoll*df.pitch/2
+
     #Find length and collimation functions    
-    X=[df.lcoll,df.lscan,df.kvp]
+    X=[df.lcoll,df.effective_lscan,df.kvp]
     df['klength'] = fklength(cA.A,X)
     df['kcoll'] = fkcoll(cA.A,X)
+    df['kkvp'] = fkkvp(cA.A,X)
     
-    df['kall'] = cA.A[0]*df.klength*df.kcoll*df.ksize*df.kangle*df.pitch
+    df['kall'] = cA.A[0]*df.klength*df.kcoll*df.ksize*df.kangle*df.pitch*df.kkvp
     
     #Calculate dose prediction
     df['predicted'] = df.ctdi*df.kall
+    if 'D' in df.columns:
+        df['ratio'] = df.D/df.predicted
 
     return df
 
@@ -301,81 +365,59 @@ def process_spreadsheet(fn,fit_fn = 'fit/ge_optima_660.fit',cA = None, cDevices 
 #%%
 #plotting=True
 
-def plot_fit(df,cA):
-    
-    
-    #Plot the ratio of predicted to measured values
-    masky = (df.angle==0)
-    print(df.predicted[masky].std()/df.predicted[masky].mean())
-    df = df[masky].sort_values(['LR','kvp','lscan','lcoll']).reset_index()
-    sep_gaps = df.LR.value_counts().sort_index().cumsum().reset_index()
-    
-    seps = [df.index.min()-2]
-    for s in sep_gaps.LR[:-1]:
-        seps.append(s-0.5)
-    
-    seps.append(sep_gaps.LR.iloc[-1]+2)
-    seps = np.array(seps)
-    print(seps)
-#    = np.array([-5,38.5,46.5,49.5,55])
-    #color to kvp
-    #scan length to shape
-    kvps = (80,100,120,140)
-    colors = ('C0','C1','C2','C3')
-    #kvpcol = (1,2,3,4)
-    ls = ((20,'x'),(40,'o'),(120,'+'))
-    #lshape = ('x','o','+')
-    
-    fig,ax = plt.subplots()
-    
-    ax.axhline(y=1, xmin=0, xmax=1, linestyle = '--',color = 'k',zorder=6)
-    
-    
-    xticks = (seps[:-1]+seps[1:])/2
-    
-    rs = ['16 (Head)','20','32 (CTDI body)','40']
-    for i,x in enumerate(seps):
-        if i%2==1:
-            ax.axvspan(seps[i-1],seps[i], alpha=0.15, color='grey')
-    
-    ax.set_xticks(xticks)
-    ax.set_xticklabels(rs)
-    
-    ax.set_xlabel('Phantom diameter/type (cm)')
-    
-    
+  
 
-    for i,kvp in enumerate(kvps):
-        for l,shape in ls:
-            m = (df.kvp==kvp)&(df.lscan==l) & (df.angle==0)& (df.type=='ax')
-            ax.errorbar(df.index[m],df.D[m]/df.predicted[m],df.Derr[m],marker=shape,linestyle='',color=colors[i],zorder =1)
+def plot_fit(df):
     
+    fig, ax = skin_dose_plot(df, 'ratio')
+    
+    # Set 
+    #ax.set_xbound(lower=df.index.min()-2,upper = df.index.max()+2)
+#    ax.set_ybound(lower = .7,upper = 1.3)
 
-    
-    testh = [mpatches.Patch(color = colors[i],label = str(kvps[i])+' kVp') for i ,k in enumerate(kvps)]
-    testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm scan length') for i ,l in enumerate(ls)]
-    
-    
-    ax.set_xbound(lower=df.index.min()-2,upper = df.index.max()+2)
-    ax.set_ybound(lower = .7,upper = 1.3)
-    ax.legend(handles = testh+testi,ncol=2,fancybox=True)
     #ax.set_ylim([.65,1.35])
     ax.set_ylabel('Measured/predicted surface dose')
     
     fig.tight_layout()
-    fig.savefig('out/'+'datavsmodel.png',format='png',dpi=300)
-    fig.savefig('out/'+'datavsmodel.pdf',format='pdf',dpi=600)
+    #fig.savefig('out/'+'datavsmodel.png',format='png',dpi=300)
+    fig.savefig('out/'+'datavsmodel.svg',format='svg',dpi=600)
     plt.show()
     plt.close()
     
-def plot_pre_fit(df,cA):
     
     
-    #Plot the ratio of predicted to measured values
-    masky = (df.angle==0)
-    print(df.predicted[masky].std()/df.predicted[masky].mean())
-    df = df[masky].sort_values(['LR','kvp','lscan','lcoll']).reset_index()
+def skin_dose_plot(df, plot_col = 'ratio', error='Dnormerr'):
+
+    #Plot the ratio of predicted to measured values   
+    df = df.sort_values(['LR','kvp','lscan','lcoll']).reset_index()
+    
+
+
+    # Get the key values from the dataframe, and assign a color to each kVp
+    # Then assign a shape to each scan lenght/beam collimation combo
+    kvps = df.kvp.unique()
+    kvps.sort()
+        
+    colors = ('C0','C1','C2','C3','C4','C5','C6','C7','C8','C9','C10')
+    shapes = ('*','s','x','o','^','<','>','v','P','1','2','3','4')
+    
+    # Create iterables with unique scan/beam width with shape
+    l_shapes = [(a,b,c) for (a,b),c in zip(df.loc[:,['lcoll','lscan']].drop_duplicates().sort_values(['lcoll','lscan']).values, shapes)]
+    
+    # Iterable relating kvp to color
+    kvp_colors = list(zip(kvps, colors))
+    
+    # Start the plot
+    fig,ax = plt.subplots()
+    
+    # Add info relating to phantom diameter via the X axis
+    ax.axhline(y=1, xmin=0, xmax=1, linestyle = '--',color = 'k',zorder=6)
+    
+
+    # Measure where the different phantom size data should is in the index
     sep_gaps = df.LR.value_counts().sort_index().cumsum().reset_index()
+    phantom_sizes = {8:'16\n(CTDI head)',16:'32\n(CTDI body)'}
+    sep_gaps['gap_name'] = sep_gaps['index'].apply(lambda x: phantom_sizes[x] if x in phantom_sizes else x*2)
     
     seps = [df.index.min()-2]
     for s in sep_gaps.LR[:-1]:
@@ -383,68 +425,59 @@ def plot_pre_fit(df,cA):
     
     seps.append(sep_gaps.LR.iloc[-1]+2)
     seps = np.array(seps)
-    print(seps)
-#    = np.array([-5,38.5,46.5,49.5,55])
-    #color to kvp
-    #scan length to shape
-    kvps = (80,100,120,140)
-    colors = ('C0','C1','C2','C3')
-    #kvpcol = (1,2,3,4)
-    ls = ((20,'x'),(40,'o'),(120,'+'))
-    #lshape = ('x','o','+')
-    
-    fig,ax = plt.subplots()
-    
-#    ax.axhline(y=1, xmin=0, xmax=1, linestyle = '--',color = 'k',zorder=6)
-    
     
     xticks = (seps[:-1]+seps[1:])/2
     
-    rs = ['16 (Head)','20','32 (CTDI body)','40']
+    
     for i,x in enumerate(seps):
         if i%2==1:
             ax.axvspan(seps[i-1],seps[i], alpha=0.15, color='grey')
     
     ax.set_xticks(xticks)
-    ax.set_xticklabels(rs)
+    ax.set_xticklabels(sep_gaps.gap_name)
     
     ax.set_xlabel('Phantom diameter/type (cm)')
     
+    for (lcoll, lscan, shape), (kvp, color) in itertools.product(l_shapes, kvp_colors):
+        m = (df.kvp==kvp) & (df.lscan==lscan) & (df.lcoll==lcoll)
+        if error:
+            ax.errorbar(df[m].index, df.loc[m,plot_col], df.loc[m,error],marker=shape, linestyle='', color=color, zorder=1)
+        ax.plot(df.index[m], df.loc[m,plot_col], marker=shape,linestyle='',color=color,zorder =1)
     
 
-    for i,kvp in enumerate(kvps):
-        for l,shape in ls:
-            m = (df.kvp==kvp)&(df.lscan==l) & (df.angle==0)& (df.type=='ax')
-            ax.errorbar(df.index[m],df.D[m]/df.ctdi[m],df.Derr[m],marker=shape,linestyle='',color=colors[i],zorder =1)
+    # Add color patches and marker meaning to the legend manually
+    legend_kvp_colors = [mpatches.Patch(color = color,label = f'{kvp} kVp') for kvp, color in kvp_colors]
+    legend_shapes = [
+        lines.Line2D([], [],color = 'k',linestyle='', marker=shape,
+                     label = f'BW:{lcoll}, SL: {lscan}'
+                     ) for lcoll, lscan, shape in l_shapes]
     
+    # Set 
+    #ax.set_xbound(lower=df.index.min()-2,upper = df.index.max()+2)
+#    ax.set_ybound(lower = .7,upper = 1.3)
+    ax.legend(handles = legend_kvp_colors+legend_shapes,ncol=2,fancybox=True)
+    return fig, ax
+    
+    
+def plot_pre_fit(df):
 
-    
-    testh = [mpatches.Patch(color = colors[i],label = str(kvps[i])+' kVp') for i ,k in enumerate(kvps)]
-    testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm scan length') for i ,l in enumerate(ls)]
-    
-    
-    ax.set_xbound(lower=df.index.min()-2,upper = df.index.max()+2)
-    ax.set_ybound(lower = .7)
-    ax.legend(handles = testh+testi,ncol=2,fancybox=True)
+    fig, ax = skin_dose_plot(df, 'Dnorm')
     #ax.set_ylim([.65,1.35])
-    ax.set_ylabel('Measured dose/CTDIvol')
+    ax.set_ylabel('Measured surface dose/Reported CTDIvol')
     
     fig.tight_layout()
-#    fig.savefig('out/'+'datavsmodelpre.png',format='png',dpi=300)
-    fig.savefig('out/'+'datavsmodelpre.pdf',format='pdf',dpi=600)
+    fig.savefig('out/'+'datavsmodelpre.svg',format='svg',dpi=600)
+    #fig.savefig('out/'+'datavsmodel.pdf',format='pdf',dpi=600)
     plt.show()
     plt.close()
     
-    
-    
-    #print((df.predicted[Amask]).std()/(df.predicted[Amask]).mean())
-    
-#a = make_fit('dat/ge_optima_660_raw.xlsx','ge_optima_660')
-#    return df
-    
 #plot_fit(df,cA)
 
-    #%%
+    #%% PLOTTING
+
+
+
+
 
 def plotting(df,cA):
     df['Dnorm'] = df.D/df.ctdi
@@ -482,7 +515,7 @@ def plotting(df,cA):
     
     
     
-    masky = (df.LR==16) & (df.angle==0)& (df.type=='ax')
+    masky = (df.LR==16) & (df.angle==0)& (df.scan_type=='ax')
     testdf = df[masky].sort_values(by=['kvp','lscan','lcoll'])
     
     for i,coll in enumerate(colls):
@@ -508,7 +541,7 @@ def plotting(df,cA):
 
     
     #Plot klength, alonside a few data points
-    masky = (df.angle==0)&(df.LR==16) & (df.name!='ctdi1402')& (df.type=='ax')#&(df.l==df.lcoll)
+    masky = (df.angle==0)&(df.LR==16) & (str(df.name) !='ctdi1402')& (df.scan_type=='ax')#&(df.l==df.lcoll)
     
     x = np.linspace(0,120,120)
     
@@ -520,7 +553,7 @@ def plotting(df,cA):
         y = fklength((cA.A),(x,x,kv))
         ax.plot(x,y,label = str(kv)+' kVp',color='C'+str(i))
         m=masky&(df.kvp==kv)
-        ax.errorbar(df.lscan[m],df.Dnorm[m]/df.kcoll[m]/cA.A[0],(df.Derr*df.Dnorm/cA.A[0])[m],fmt='o',color='C'+str(i),alpha=.6,label='_nolegend_')
+#        ax.errorbar(df.lscan[m],df.Dnorm[m]/df.kcoll[m]/cA.A[0],(df.Derr*df.Dnorm/cA.A[0])[m],fmt='o',color='C'+str(i),alpha=.6,label='_nolegend_')
         
     ax.legend()
     ax.set_ylabel(r'Scan length correction factor $k_{length}$')
@@ -529,13 +562,7 @@ def plotting(df,cA):
     fig.savefig('out/'+'klength.pdf',format='pdf',dpi=600)
     plt.show()
     plt.close()
-    
 
-    
-    
-    
-    
-    
 
     #Plot kcoll, it doesn't really make sense to add data points to this plot
     
@@ -568,7 +595,7 @@ def plotting(df,cA):
     #plt.plot(df.predicted[m]/cA.A[0],'o')
     
     #Calculated over-rang for helical scans
-    m=df.type=='hel'
+    m=df.scan_type=='hel'
     
 #    X=[df.lcoll,t,df.kvp]
 #    df['klength'] = fklength(cA.A,X)
@@ -611,7 +638,7 @@ def plotting(df,cA):
         predicted=df.Dnorm/klength/df.kcoll/df.ksize/df.pitch
         
         for l,shape in ls:
-            m = (df.lcoll==l) & (df.angle==0)& (df.type=='hel')
+            m = (df.lcoll==l) & (df.angle==0)& (df.scan_type=='hel')
             ax.errorbar(df.index[m],predicted[m]/cA.A[0],df.Derr[m]*0,marker=shape,linestyle='',color='C'+str(i),zorder =1)
     
     #        plt.plot()
@@ -619,8 +646,7 @@ def plotting(df,cA):
     testh = [mpatches.Patch(color = colors[i],label = 'e = '+str(es[i])+'%') for i ,k in enumerate(colls)]
     testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm collimation') for i ,l in enumerate(ls)]
     
-    
-    
+
     ax.legend(handles = testh+testi,ncol=2,fancybox=True)
     ax.set_ylim([.65,1.35])
     ax.set_ylabel('Measured/predicted surface dose')
@@ -634,7 +660,7 @@ def plotting(df,cA):
     
     
     
-    #%%
+
     #Check against the delas heras data set
     
     delas = pd.read_excel('delas.xlsx')
@@ -646,7 +672,53 @@ def plotting(df,cA):
     plt.plot()
     
     #%%
-    
+
+
+df, cA, cDevices = make_fit('dat/ge_optima_660_raw.xlsx','test')
+#df, cA, cDev = make_fit('dat/combined_data_test.xlsx','siemans')
+tdf = pd.read_excel('dat/combined_data_test.xlsx')
+tdf = apply_fit(tdf, cA, cDevices)
+tdf = tdf.query('(angle==0)')
+print(tdf.ratio.mean())
+print(tdf.ratio.std())
+plot_fit(tdf)
+plot_pre_fit(tdf)
+
+
+ttdf = df.query('(angle==0) & (scan_type=="ax")')
+print(ttdf.ratio.mean())
+print(ttdf.ratio.std())
+
+
+adf = tdf.query('(angle==0)')
+adf = df.query('(angle==0)').query('(scan_type!="ax")|(AP!=16)|(batch=="2607siemans")')
+c
+
+
+
+
+
+#%%
+#
+df, cA, cDev = make_fit('dat/combined_data_test.xlsx','siemans')
+
+cA,cDevices = load_fit('fit/siemans.fit')
+df2 = pd.read_excel('dat/combined_data_test.xlsx')
+df2 = apply_fit(df2, cA, cDevices)
+
+#%%
+cA,cDevices = load_fit('fit/test.fit')
+#%%
+#default_fn = 'fit/ge_optima_660.fit'
+#cA,cDevices = load_fit(default_fn)
+#df = pd.read_excel('dat/ge_optima_660_raw.xlsx')
+#process_spreadsheet('predict.xlsx',cA=cA,cDevices=cDevices)
+
+#df = predicted(df,cA=cA,cDevices=cDevices)
+#
+plot_fit(df)
+plot_pre_fit(df)
+#plotting(df,cA)
 
 
 
@@ -655,20 +727,5 @@ def plotting(df,cA):
 
 
 #%%
-default_fn = 'fit/ge_optima_660.fit'
-cA,cDevices = load_fit(default_fn)
-df = pd.read_excel('dat/ge_optima_660_raw.xlsx')
-process_spreadsheet('predict.xlsx',cA=cA,cDevices=cDevices)
-
-#df = predicted(df,cA=cA,cDevices=cDevices)
-#
-#plot_fit(df,cA)
-#plotting(df,cA)
-
-
-
-
-
-
 
 
