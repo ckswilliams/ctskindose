@@ -8,7 +8,7 @@ import shapely.affinity
 from scipy.signal import savgol_filter
 
 import os
-script_dir = os.path.dirname(__file__)
+
 
 
 R=55
@@ -192,15 +192,8 @@ class table():
             return np.arctan(mp.x/mp.y)
         else:
             raise ValueError('something unexpected: ' + mp.geom_type)
-        
-    
-#table(shape(16,16),'test').intersection(0)*180/np.pi
 
-            
-            
-
-
-        
+                
 def dose_series(iDD,iBT,ishape,theta,Dlength,dlength,phi):
     #Load bowtie data
     bt = iBT.get_I(phi)
@@ -220,14 +213,6 @@ def dose_series(iDD,iBT,ishape,theta,Dlength,dlength,phi):
     
 
 #Load depth dose and bowtie data
-
-
-
-
-
-
-    
-
 class device_data():
     def __init__(self,dd_list,bt_list):
         self.set_dd_list(dd_list)
@@ -253,10 +238,7 @@ class device_data():
     
 Devices = device_data([],[])
 
-default_dds = [[80,'dat/dd/100.xlsx'],
-                [100,'dat/dd/100.xlsx'],
-                [120,'dat/dd/120.xlsx'],
-                [140,'dat/dd/140.xlsx']]
+
 
 def default_bts_maker():
     defaulty = []
@@ -267,10 +249,6 @@ def default_bts_maker():
         for filt in types:
             defaulty.append([filt,kv,bt_dir+filt+'.csv'])
     return defaulty
-default_bts = default_bts_maker()
-
-Devices.set_dd_list(default_dds)
-Devices.set_bt_list(default_bts)
   
     
 def plot_bowties(Devices=Devices):
@@ -304,8 +282,6 @@ def plot_dds(Devices=Devices):
 
     
     
-#plot_dds()
-
 
 #%%
 #Get total dose for each ellipse, for circles
@@ -315,13 +291,14 @@ def total_dose(AP,LR,ddname,filter_type,angle = 0):
     except KeyError:
         print('Could not load depth dose with name' + str(ddname))
         print('Available types are:')
-        print(list(dd.keys()))
-        try:
-            iDD = Devices.dd['120']
-            print('Defaulting to 120 kVp')
-        except:
-            iDD = Devices.dd[list(Devices.dd.keys())[-1]]
-            print('Defaulting to '+ list(Devices.dd.keys())[-1] +'kVp')
+        print(list(Devices.dd.keys()))
+        # Commenting because bad input should lead to failure, not just giving incorrect results
+        # try:
+        #     iDD = Devices.dd['120']
+        #     print('Defaulting to 120 kVp')
+        # except:
+        #     iDD = Devices.dd[list(Devices.dd.keys())[-1]]
+        #     print('Defaulting to '+ list(Devices.dd.keys())[-1] +'kVp')
     try:
         iBT = Devices.bt[filter_type][ddname]
     except KeyError:
@@ -425,7 +402,7 @@ def make_geo_plots():
         
     
     
-make_geo_plots()
+
 
 #%%
 def make_kvp_plots():
@@ -479,22 +456,23 @@ def make_shape_plots():
     geoLR = np.linspace(1,50,50)
     shapes = [(1,1,'Cylinder'),(1,1.45,'Ellipsoid')]
     dose_list = {}
+    fig, ax = plt.subplots()
     for shape in shapes:
         dose_list[shape[2]] = {}
         for ddname in Devices.dd.keys():
             doses = total_dose_series(geoAP*shape[0],geoLR*shape[1],ddname,'body')
             dose_list[shape[2]][ddname] =doses
-            plt.plot(geoAP*2,doses,label=str(ddname) + ' kVp')
+            ax.plot(geoAP*2,doses,label=str(ddname) + ' kVp')
 
-        ax = plt.axes()
         ax.yaxis.set_major_formatter(plt.NullFormatter())
-        plt.ylabel('Relative dose')
-        plt.xlabel('Phantom AP diameter (cm)')
-        plt.ylim(ymin=0)
-        plt.legend(loc=2)
+        ax.set_ylabel('Relative dose')
+        ax.set_xlabel('Phantom AP diameter (cm)')
+        ax.set_ylim(ymin=0)
+        fig.legend(loc=2)
         
-        plt.tight_layout()
-        plt.savefig('out/totdose_'+shape[2]+'.svg',format='svg',dpi=600)
+        fig.tight_layout()
+        fig.savefig('out/totdose_'+shape[2]+'.svg',format='svg',dpi=600)
+        fig.show()
         plt.show()
         
     return dose_list
@@ -515,100 +493,81 @@ def make_shape_ratio_plots(data = False):
     
     return data
 
+
+#%%
+
+
+def export_all_size_rations_to_excel(xlsx_fn='output_pathlength_data.xlsx'):
+    aps = np.linspace(1,45,45)
+    lrs = np.linspace(1,45,45)
+    
+    apg,lrg = np.meshgrid(aps,lrs)
+    
+    # desperate attempt to speed up. didn't work.
+    def testf(ap,lr,kvp,filter):
+        return relative_dose(ap,lr,kvp,filter)
+    testv = np.vectorize(testf)
+    
+    kvps = [80,100,120,140]
+    ct_filters = ['head','body']
+    
+    out = {}
+    for kv in kvps:
+        out[kv]={}
+    
+    for kv in kvps:
+        for ct_filter in ct_filters:
+            print(f'Processing CT filter: {ct_filter}, kVp: {kv}')
+            out[kv][ct_filter] = testv(apg,lrg,kv,ct_filter)
+    
+    xl = pd.ExcelWriter(xlsx_fn)
+    for kv in kvps:
+        for fil in ct_filters:
+            t = pd.DataFrame(out[kv][fil])
+            t.to_excel(xl,
+                                sheet_name = str(kv)+str(fil),
+                                header = False,
+                                index = False
+                                )
+    xl.save()
+
+#%% In this section, the depth dose curves and bowtie filter profiles are defined
+
+
+# Edit the values in here if you have collected local depth dose curves
+dd_curves = [[80,'dat/dd/100.xlsx'],
+                [100,'dat/dd/100.xlsx'],
+                [120,'dat/dd/120.xlsx'],
+                [140,'dat/dd/140.xlsx']]
+
+#nb note limtation in collected data - all kvps use the same bowtie filter profile
+bt_profiles = [['body', 80, 'dat/bowtie/body.csv'],
+              ['head', 80, 'dat/bowtie/head.csv'],
+              ['body', 100, 'dat/bowtie/body.csv'],
+              ['head', 100, 'dat/bowtie/head.csv'],
+              ['body', 120, 'dat/bowtie/body.csv'],
+              ['head', 120, 'dat/bowtie/head.csv'],
+              ['body', 140, 'dat/bowtie/body.csv'],
+              ['head', 140, 'dat/bowtie/head.csv']]
+
+Devices.set_dd_list(dd_curves)
+Devices.set_bt_list(bt_profiles)
+
+
+#%% These can be uncommented to produce plots.
+
 #make_kvp_plots()
-make_shape_plots()
-#%%
+#make_shape_plots()
+#make_geo_plots()
+#make_shape_ratio_plots()
+#plot_dds()
+
+#%% This function can be uncommented to produce a set of csv files which can be imported to the 
+# dose prediction spreadsheet. Be aware this requires a lot of crunchy calculations
+# Suggested timeframe to complete is 10 minutes PER kvp/filter combination!
+# So make sure you're not about to shutdown your computer :)
+
+#export_all_size_rations_to_excel()
 
 
-#t,y = get_geo(16,16)
-#fig,ax = plt.subplots()
-#plot_geo('test',*t,ax=ax)
-#
-#ax.set_xlabel(r'Source angle ($^{\circ}$)')
-#ax.set_ylabel(r'Angle ($^{\circ}$),distance (cm)')
-#fig.tight_layout()
-#fig.savefig('out/16_16.eps',format='eps',dpi=600)
-##%%
-#
-#dose = dose_series(Devices.dd[120],Devices.bt['body'][120],y,*t)
-#
-#
-#fig,ax = plt.subplots()
-#plot_dose('test',t[0],dose,ax)
-#ax.set_xlabel(r'Source angle ($^{\circ}$)')
-#ax.set_ylabel(r'Relative dose')
-#fig.tight_layout()
-#fig.savefig('out/16_16_dose.eps',format='eps',dpi=600)
-#
-#
-#
 
-
-#%%
-#aps = np.linspace(1,45,45)
-#lrs = np.linspace(1,45,45)
-#
-#apg,lrg = np.meshgrid(aps,lrs)
-#
-#def testf(ap,lr,kvp,filter):
-#    return relative_dose(ap,lr,kvp,filter)
-#testv = np.vectorize(testf)
-#
-#
-#
-#kvps = [80,100,120,140]
-#filters = ['head','body']
-#
-#out = {}
-#for kv in kvps:
-#    out[kv]={}
-#
-#for kv in kvps:
-#    out[kv]['body'] = testv(apg,lrg,kv,'body')
-#for kv in kvps:
-#    out[kv]['head'] = testv(apg,lrg,kv,'head')
-#    
-##%%
-#    
-#xl = pd.ExcelWriter('pldata.xlsx')
-#
-#for kv in kvps:
-#    for fil in filters:
-#        t = pd.DataFrame(out[kv][fil])
-#        t.to_excel(xl,
-#                            sheet_name = str(kv)+str(fil),
-#                            header = False,
-#                            index = False
-#                            )
-#    
-#    
-#    
-#    
-#    
-#xl.save()
-#    
-#    
-###%%
-##
-##from mpl_toolkits.mplot3d import Axes3D
-###%%
-##
-##fig = plt.figure()
-##ax = fig.add_subplot(111, projection='3d')
-##
-##ax.plot_surface(apg, lrg, t)
-##
-##ax.set_xlabel('AP Label')
-##ax.set_ylabel('LR Label')
-##ax.set_zlabel('ksize Label')
-##
-##plt.show()
-#
-##
-##%%
-##
-#crap = [out[80][i,i] for i in np.arange(30)]
-##%%
-#
-#i=16
-#plt.plot(apg[i,:],t[i,:])

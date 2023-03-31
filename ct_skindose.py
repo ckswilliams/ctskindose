@@ -8,22 +8,13 @@ from scipy import odr
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
-import math
 import pickle
 import itertools
 
 from matplotlib import patches as mpatches
 from matplotlib import lines as lines
 
-
-
-
-#%%
 import pathlength as pl
-
-plotting = False
-
-#%%
 
 class c():
     def __init__(self,name='NoName',**kwargs):#l=None,D=None,fitfunc=None,guess=None,xlabel='x',sigma=None
@@ -52,28 +43,30 @@ class c():
 #            self.load_fit()
                 
 
-    def show_fit(self):
-#        labels = []
-#        kvp = [80,100,120,140]
-#        for k in kvp:
-#            for c in lengths:
-#                labels.append(f'{str(c)} mm/{str(k)} kVp')
-
-        lin=np.linspace(0,120,120)
-        for i in np.arange(self.D.shape[0]):
-            curve, = plt.plot(lin,self.v['fitfunc'](self.v['A'][[0,i+1]],lin),label = labels[i],zorder=1)
-            col = curve.get_color()
-            plt.errorbar(self.v['l'][i,:],self.v['D'][i,:],color = col, marker ='o',linestyle = 'none',markersize = 5,capsize=2,zorder=2)
-        maxval = math.ceil(np.max(self.v['D'])*1.1*10)/10
-        plt.axis((0,140,0,maxval))
-        plt.ylabel(r'Dose/CTDI$_{vol}$')
-        plt.xlabel(self.v['xlabel'])
-        lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2)
-
-        plt.savefig('out/'+self.name+'.eps',format='eps',dpi=600,bbox_extra_artists=(lgd,), bbox_inches='tight')
-        plt.show()
+    # def show_fit(self):
+    #     labels = []
+    #     kvp = [80,100,120,140]
+    #     for k in kvp:
+    #         for c in self.v['l']:
+    #             labels.append(f'{str(c)} mm/{str(k)} kVp')
+    #
+    #     lin=np.linspace(0,120,120)
+    #     for i in np.arange(self.D.shape[0]):
+    #         curve, = plt.plot(lin,self.v['fitfunc'](self.v['A'][[0,i+1]],lin),label = labels[i],zorder=1)
+    #         col = curve.get_color()
+    #         plt.errorbar(self.v['l'][i,:],self.v['D'][i,:],color = col, marker ='o',linestyle = 'none',markersize = 5,capsize=2,zorder=2)
+    #     maxval = math.ceil(np.max(self.v['D'])*1.1*10)/10
+    #     plt.axis((0,140,0,maxval))
+    #     plt.ylabel(r'Dose/CTDI$_{vol}$')
+    #     plt.xlabel(self.v['xlabel'])
+    #     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2)
+    #
+    #     plt.savefig('out/'+self.name+'.eps',format='eps',dpi=600,bbox_extra_artists=(lgd,), bbox_inches='tight')
+    #     plt.show()
 
         #plt.show()
+
+
     def show_discrepancy(self):
         res = self.v['fitfunc'](self.v['A'],self.v['l'])
         res = res/self.v['D']
@@ -85,7 +78,7 @@ class c():
         plt.savefig('out/'+self.name+'_error.eps',format='eps',dpi=600)
         plt.show()
 
-        
+
     def save_fit(self):
         pass
 #        pickle.dump(self.v,open('fit/'+self.name,'wb'))
@@ -95,7 +88,7 @@ class c():
 #        self.A = self.v['A']
 
 
-class device_settings():
+class DeviceSettings():
     def __init__(self,dd_df='default',bt_df='default'):
 #        This list should come by grace of the input into the app, or manually here
 #        bt_list = [(filter_type,kv,fn)]
@@ -248,7 +241,7 @@ def fk_curvefit(X,*A):
 
 #Function for running the fit, returns a fitted calibration class object
 def fit_data(df,name):
-    Amask = (df.LR==16) & (df.angle==0) & (str(df.name) !='ctdi1402') & (df.scan_type=='ax')
+    Amask = (df.LR==16) & (df.angle==0) & (df.scan_type=='ax')
     dfA = df[Amask]
     #Aguess = [ 2.48866957,  0.13324515, -0.01845219,  7.47206539,  0.83062203]
     Aguess = (1.6,4,.1,.1)# 4 parameter fit instead of 5
@@ -274,7 +267,7 @@ def make_fit(skin_data_fn,name,dd_list='default',bt_list='default'):
 
     #Apply the fit function
     cA = fit_data(df,name)
-    cDevices = device_settings()
+    cDevices = DeviceSettings()
     
     
     
@@ -671,43 +664,7 @@ def plotting(df,cA):
     delas.to_excel('delas.xlsx')
     plt.plot()
     
-    #%%
 
-
-df, cA, cDevices = make_fit('dat/ge_optima_660_raw.xlsx','test')
-#df, cA, cDev = make_fit('dat/combined_data_test.xlsx','siemans')
-tdf = pd.read_excel('dat/combined_data_test.xlsx')
-tdf = apply_fit(tdf, cA, cDevices)
-tdf = tdf.query('(angle==0)')
-print(tdf.ratio.mean())
-print(tdf.ratio.std())
-plot_fit(tdf)
-plot_pre_fit(tdf)
-
-
-ttdf = df.query('(angle==0) & (scan_type=="ax")')
-print(ttdf.ratio.mean())
-print(ttdf.ratio.std())
-
-
-adf = tdf.query('(angle==0)')
-adf = df.query('(angle==0)').query('(scan_type!="ax")|(AP!=16)|(batch=="2607siemans")')
-c
-
-
-
-
-
-#%%
-#
-df, cA, cDev = make_fit('dat/combined_data_test.xlsx','siemans')
-
-cA,cDevices = load_fit('fit/siemans.fit')
-df2 = pd.read_excel('dat/combined_data_test.xlsx')
-df2 = apply_fit(df2, cA, cDevices)
-
-#%%
-cA,cDevices = load_fit('fit/test.fit')
 #%%
 #default_fn = 'fit/ge_optima_660.fit'
 #cA,cDevices = load_fit(default_fn)
@@ -716,10 +673,36 @@ cA,cDevices = load_fit('fit/test.fit')
 
 #df = predicted(df,cA=cA,cDevices=cDevices)
 #
-plot_fit(df)
-plot_pre_fit(df)
+
 #plotting(df,cA)
 
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--fit', action='store_true')
+    parser.add_argument('--plot', action='store_true')
+    parser.add_argument('--fit_name', default='fit/combined.fit')
+    parser.add_argument('--process', default='dat/combined_data_input.xlsx')
+    parser.add_argument('--output_fn', default='out/prediction_output.xlsx')
+    args = parser.parse_args()
+
+    if args.fit:
+        df, cA, cDev = make_fit('dat/combined_data_input.xlsx','combined')
+        cA,cDevices = load_fit('fit/combined.fit')
+
+        df2 = pd.read_excel('dat/combined_data_input.xlsx')
+        df2 = apply_fit(df2, cA, cDevices)
+
+        if args.plot:
+            plot_fit(df2)
+            plot_pre_fit(df2)
+
+    if args.process or not args.fit:
+        df = pd.read_excel(args.process)
+        cA, cDevices = load_fit(args.fit_name)
+        df = apply_fit(df2, cA, cDevices)
+        df.to_excel(args.output_fn)
 
 
 
