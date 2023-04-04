@@ -14,7 +14,7 @@ import itertools
 from matplotlib import patches as mpatches
 from matplotlib import lines as lines
 
-import pathlength as pl
+import ctpsd_size_correction as pl
 
 class c():
     # NOTE THAT THIS CLASS IS NO LONGER USED!!!!
@@ -147,6 +147,8 @@ class CF():
         params = ['c','c_penumbra','c_length','c_kvp']
         output = pd.Series(self.A, index=params)
         output.to_clipboard()
+
+        
 
 #%% Original fit functions
 #Fit functions
