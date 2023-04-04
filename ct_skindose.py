@@ -17,6 +17,11 @@ from matplotlib import lines as lines
 import pathlength as pl
 
 class c():
+    # NOTE THAT THIS CLASS IS NO LONGER USED!!!!
+    A: np.array=np.array([0,0,0,0])
+    name:str = None
+    v:dict = None
+    
     def __init__(self,name='NoName',**kwargs):#l=None,D=None,fitfunc=None,guess=None,xlabel='x',sigma=None
 #        [self.A,self.C],fit_cov = curve_fit(fitfunc,l,D1,guess)
 #        print(self.A)
@@ -86,6 +91,13 @@ class c():
 #    def load_fit(self):
 #        self.v = pickle.load(open('fit/'+self.name,'rb'))
 #        self.A = self.v['A']
+    def __repr__(self):
+        return f'c:{self.A[0]}, c_penumbra:{self.A[1]}, c_length:{self.A[2]}, c_kvp:{self.A[3]}'
+    
+    def to_clipboard_excel(self):
+        params = ['c','c_penumbra','c_length','c_kvp']
+        output = pd.Series(self.A, index=params)
+        output.to_clipboard()
 
 
 class DeviceSettings():
@@ -121,9 +133,20 @@ class DeviceSettings():
 
 from scipy.optimize import curve_fit
 class CF():
+    A: np.array=np.array([0,0,0,0])
+    name:str = None
+    v:dict = None
+    
     def __init__(self, func, D, X, guess, sigma=None):
         self.A, self.v = curve_fit(func, X, D, guess, sigma, absolute_sigma=True)
         
+    def __repr__(self):
+        return f'c:{self.A[0]}, c_penumbra:{self.A[1]}, c_length:{self.A[2]}, c_kvp:{self.A[3]}'
+    
+    def to_clipboard_excel(self):
+        params = ['c','c_penumbra','c_length','c_kvp']
+        output = pd.Series(self.A, index=params)
+        output.to_clipboard()
 
 #%% Original fit functions
 #Fit functions
@@ -190,7 +213,7 @@ def fklength(A,X):
     c_penumbra = A[1]
     c_length = A[2]
     #return 1 + c_length*l
-    return 1-0.5*np.exp(-c_length*(l))
+    return 1-0.5*np.exp(-c_length*(l+c_penumbra))
 
 
 #def fkasym(A,X):
