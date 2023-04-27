@@ -387,11 +387,11 @@ def make_geo_plots():
         
         for j,ax in enumerate(rows):
             if i==0:
-                ax.set_title(r'\Large{{{}}}'.format(plot_types[j]))
+                ax.set_title('$\textbf{test}')#.format(plot_types[j]))
             if i == len(axes) - 1:
                 ax.set_xlabel(r'Source angle ($^{\circ}$)')
             if j == 0:
-                ax.set_ylabel(r'\Large{{{}}}'.format(shape_types[i])+'\n'+r'Angle ($^{\circ}$),distance (cm)')
+                ax.set_ylabel(r'\textbf{{{}}}'.format(shape_types[i])+'\n'+r'Angle ($^{\circ}$),distance (cm)')
             else:
                 ax.set_ylabel('Relative dose')
                 ax.set_ylim((0,max_rel_dose*1.07))
@@ -409,9 +409,9 @@ def make_geo_plots():
 
 
 #%%
-def make_kvp_plots():
-    geoAP = np.linspace(1,50,50)
-    geoLR = np.linspace(1,50,50)
+def make_shape_phantom_ksize_plots():
+    geoAP = np.linspace(1,30,30)
+    geoLR = np.linspace(1,30,30)
 
     for ddname in Devices.dd.keys():
         doses = total_dose_series(geoAP,geoLR,ddname,'body')/total_dose(16,16,ddname,'body')
@@ -422,9 +422,9 @@ def make_kvp_plots():
 #        ax.yaxis.set_major_formatter(plt.NullFormatter())
         ax.set_ylabel(r'Size correction factor ($k_{size}$)')
         ax.set_xlabel('Phantom AP diameter (cm)')
-        ax.set_ylim(ymin=0)
-        ax.axis([0,100,0.7,2])
-        ax.legend(loc=2)
+        ax.set_xlim(xmin=10,xmax=60)
+        ax.set_ylim(ymin=0.7)
+        ax.legend()
     
         #Show background objects
         add_patient_size(ax)
@@ -436,22 +436,24 @@ def make_kvp_plots():
 def add_patient_size(ax):
     #Head section
     ax.axvspan(15, 20, alpha=0.2, color='green')
-    ax.annotate('Head',
-                xy = (18,0.8),
-                xytext = (3,0.8),
-                arrowprops=dict(arrowstyle="->"),
-                horizontalalignment='left',
-                verticalalignment='center',
-                                )
+    ax.text(17.5,.77, 'Head',horizontalalignment='center')
+    # ax.annotate('Head',
+    #             xy = (18,0.8),
+    #             xytext = (3,0.8),
+    #             arrowprops=dict(arrowstyle="->"),
+    #             horizontalalignment='left',
+    #             verticalalignment='center',
+    #                             )
     #Body section
-    ax.axvspan(24, 50, alpha=0.2, color='green')
-    ax.annotate('Typical torso AP diameters',
-                xy = (35,0.8),
-                xytext = (60,0.8),
-                arrowprops=dict(arrowstyle="->"),
-                horizontalalignment='left',
-                verticalalignment='center',
-                                )
+    ax.axvspan(24, 45, alpha=0.2, color='green')
+    ax.text(35,.77,'Torso', horizontalalignment='center')
+    # ax.annotate('Typical torso range',
+    #             #xy = (35,0.77),
+    #             xytext = (35,0.77),
+    #             #arrowprops=dict(arrowstyle="->"),
+    #             horizontalalignment='center',
+    #             verticalalignment='center',
+    #                             )
 
      
 
@@ -472,6 +474,7 @@ def make_shape_plots():
         ax.set_ylabel('Relative dose')
         ax.set_xlabel('Phantom AP diameter (cm)')
         ax.set_ylim(ymin=0)
+        ax.set_xlim(xmax=50)
         fig.legend(loc=2)
         
         fig.tight_layout()
