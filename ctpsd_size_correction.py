@@ -347,6 +347,7 @@ def plot_geo(name,theta,D,d,phi,ax=None):
     
 def plot_dose(name,theta,dose,ax):
     ax.plot(theta,dose,label = 'Dose')
+
 #    ax.set_ylabel(r'Dose (relative)')
 #    ax.set_xlabel(r'$\Theta$ ($^{\circ}$)')
     #plt.legend(loc=2)
@@ -372,18 +373,18 @@ def make_geo_plots():
     rows = len(geos)
     #rc('text', usetex=True)
     fig, axes = plt.subplots(nrows=rows, ncols=2,sharex=True, figsize=(9, 9))# , sharex=True, sharey=True)
-
+    max_rel_dose = 0
     for i,rows in enumerate(axes):
         AP = geos[i][0]
         LR = geos[i][1]
         name = str(AP)+'_'+str(LR)
         data,ishape = get_geo(AP,LR)
         dose = dose_series(Devices.dd[120],Devices.bt['body'][120],ishape,*data)
-        
+        max_rel_dose = max(max_rel_dose, dose.max())
         plot_geo(name,*data,axes[i][0])
         plot_dose(name,data[0],dose,axes[i][1])
         
-
+        
         for j,ax in enumerate(rows):
             if i==0:
                 ax.set_title(r'\Large{{{}}}'.format(plot_types[j]))
@@ -393,6 +394,9 @@ def make_geo_plots():
                 ax.set_ylabel(r'\Large{{{}}}'.format(shape_types[i])+'\n'+r'Angle ($^{\circ}$),distance (cm)')
             else:
                 ax.set_ylabel('Relative dose')
+                ax.set_ylim((0,max_rel_dose*1.07))
+                ax.yaxis.set_label_position("right")
+                ax.yaxis.tick_right()
 
     plt.tight_layout()
     plt.savefig('out/geos_doses.svg',format='svg',dpi=600)
