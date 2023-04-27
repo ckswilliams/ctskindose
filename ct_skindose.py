@@ -304,7 +304,7 @@ def make_fit(skin_data_fn,name,dd_list='default',bt_list='default'):
     pickle.dump([cA,cDevices],open('fit/'+name+'.fit','wb'))
     
     
-    plot_fit(df)
+    plot_fit(df.loc[lambda x: x.angle == 0])
     return df,cA,cDevices
 
 
@@ -426,7 +426,7 @@ def skin_dose_plot(df, plot_col = 'ratio', error='Dnormerr'):
     kvp_colors = list(zip(kvps, colors))
     
     # Start the plot
-    fig,ax = plt.subplots()
+    fig,ax = plt.subplots(figsize=(10,6))
     
     # Add info relating to phantom diameter via the X axis
     ax.axhline(y=1, xmin=0, xmax=1, linestyle = '--',color = 'k',zorder=6)
@@ -473,7 +473,7 @@ def skin_dose_plot(df, plot_col = 'ratio', error='Dnormerr'):
     # Set 
     #ax.set_xbound(lower=df.index.min()-2,upper = df.index.max()+2)
 #    ax.set_ybound(lower = .7,upper = 1.3)
-    ax.legend(handles = legend_kvp_colors+legend_shapes,ncol=2,fancybox=True)
+    ax.legend(handles = legend_kvp_colors+legend_shapes,fancybox=True, bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
     return fig, ax
     
     
@@ -489,7 +489,7 @@ def plot_pre_fit(df):
     plt.show()
     plt.close()
     
-#plot_fit(df,cA)
+plot_fit(df)
 
     #%% PLOTTING
 
@@ -546,7 +546,7 @@ def plotting(df,cA):
     testh = [mpatches.Patch(color = colors[i],label = str(colls[i])+' mm scan length') for i ,k in enumerate(colls)]
     testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm coll.') for i ,l in enumerate(ls)]
     
-    ax.legend(handles = testh+testi,ncol=2,fancybox=True)
+    ax.legend(handles = testh+testi,ncol=2,fancybox=True, bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
     #ax.set_ylim([.65,1.3])
     ax.set_ylabel(r'Surface dose/CTDI$_{vol}$')
     
@@ -573,7 +573,7 @@ def plotting(df,cA):
         m=masky&(df.kvp==kv)
 #        ax.errorbar(df.lscan[m],df.Dnorm[m]/df.kcoll[m]/cA.A[0],(df.Derr*df.Dnorm/cA.A[0])[m],fmt='o',color='C'+str(i),alpha=.6,label='_nolegend_')
         
-    ax.legend()
+    ax.legend(loc='best')
     ax.set_ylabel(r'Scan length correction factor $k_{length}$')
     ax.set_xlabel('Scan length (mm)')
     fig.tight_layout()
@@ -665,7 +665,7 @@ def plotting(df,cA):
     testi = [lines.Line2D([], [],color = 'k',linestyle='',marker=l[1],label = str(l[0]) + ' mm collimation') for i ,l in enumerate(ls)]
     
 
-    ax.legend(handles = testh+testi,ncol=2,fancybox=True)
+    ax.legend(handles = testh+testi,ncol=2,fancybox=True, bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
     ax.set_ylim([.65,1.35])
     ax.set_ylabel('Measured/predicted surface dose')
     
@@ -689,6 +689,7 @@ def plotting(df,cA):
     delas.to_excel('delas.xlsx')
     plt.plot()
     
+df, cA, cDev = make_fit('dat/combined_data_input.xlsx','combined')
 
 #%%
 #default_fn = 'fit/ge_optima_660.fit'
@@ -713,15 +714,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.fit:
-        df, cA, cDev = make_fit('dat/combined_data_input.xlsx','combined')
-        cA,cDevices = load_fit('fit/combined.fit')
+        df, cA, cDev = make_fit('dat/ge_optima_660_input.xlsx','ge')
+        cA,cDevices = load_fit('fit/ge.fit')
 
         df2 = pd.read_excel('dat/combined_data_input.xlsx')
         df2 = apply_fit(df2, cA, cDevices)
 
         if args.plot:
-            plot_fit(df2)
-            plot_pre_fit(df2)
+            plot_fit(df2.loc[lambda x:  (x.angle==0) ])
+            plot_pre_fit(df2.loc[lambda x: (x.angle==0) & (x.scan_type=='ax')])
 
     if args.process or not args.fit:
         df = pd.read_excel(args.process)
